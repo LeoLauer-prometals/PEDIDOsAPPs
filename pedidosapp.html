@@ -577,7 +577,7 @@
             <div class="field full"><label>Se furação traseira: parafusos utilizados</label><input id="f-item-eng-parafusos"></div>
             <div class="field full" id="f-item-dev-fotos-wrap" style="display:none;">
               <label>Anexe fotos para o desenvolvimento</label>
-              <input type="file" id="f-item-dev-fotos" accept="image/*,application/pdf,video/*" multiple onchange="onSelecionarFotosDevFormulario(this)">
+              <input type="file" id="f-item-dev-fotos" accept="image/*,application/pdf,video/*,.dwg,.dxf,.stl,.step,.stp,.x_t,.x_b" multiple onchange="onSelecionarFotosDevFormulario(this)">
               <div class="detail-sub" id="f-item-dev-fotos-lista" style="margin-top:4px;"></div>
             </div>
           </div>
@@ -624,7 +624,7 @@
             <select id="f-ordemcompra"><option value="">Selecione</option><option>Sim, anexada</option><option>Aguardando ordem de compra</option><option>Não</option></select>
           </div>
           <div class="field"><label>Anexar arquivo da ordem de compra</label>
-            <input type="file" id="f-ocArquivo" accept="image/*,application/pdf" onchange="atualizarNomeArquivoFormulario()">
+            <input type="file" id="f-ocArquivo" accept="image/*,application/pdf,.dwg,.dxf,.stl,.step,.stp,.x_t,.x_b" onchange="atualizarNomeArquivoFormulario()">
             <div id="f-ocArquivo-nome" class="detail-sub" style="margin:4px 0 0; display:none;">
               <span id="f-ocArquivo-nome-texto"></span> — <span style="color:var(--erro); cursor:pointer; font-weight:700;" onclick="removerAnexoFormulario()">remover</span>
             </div>
@@ -1257,7 +1257,7 @@
         <h2 class="secao" style="margin-bottom:10px;">Arquivos</h2>
         <div id="galeria-pasta-itens" class="attach-list"></div>
         <div class="grid2" style="margin-top:10px;">
-          <div class="field"><label>Adicionar arquivo(s) a essa pasta</label><input type="file" id="galeria-novo-arquivo" accept="image/*,application/pdf,video/*" multiple></div>
+          <div class="field"><label>Adicionar arquivo(s) a essa pasta</label><input type="file" id="galeria-novo-arquivo" accept="image/*,application/pdf,video/*,.dwg,.dxf,.stl,.step,.stp,.x_t,.x_b" multiple></div>
           <button class="btn small" type="button" style="align-self:end;" onclick="galeriaAdicionarArquivo()">Adicionar à galeria</button>
         </div>
       </div>
@@ -2588,7 +2588,7 @@ function desenhoItemBoxHtml(prefixo){
       <div id="${prefixo}-desenho-existentes"></div>
       <div id="${prefixo}-desenho-novos"></div>
       <div class="field full">
-        <input type="file" id="${prefixo}-desenho-novo" accept="image/*,application/pdf,video/*" multiple onchange="onSelecionarDesenhoItem('${prefixo}', this)">
+        <input type="file" id="${prefixo}-desenho-novo" accept="image/*,application/pdf,video/*,.dwg,.dxf,.stl,.step,.stp,.x_t,.x_b" multiple onchange="onSelecionarDesenhoItem('${prefixo}', this)">
       </div>
     </div>`;
 }
@@ -4613,7 +4613,7 @@ function openDetail(id){
         <div class="field"><label>Valor da saída (deste item)</label><input id="d-sn-valor" placeholder="R$" oninput="formatarMoedaInput(this)"></div>
         <div class="field"><label>Certificado de qualidade</label><input id="d-sn-certificado" placeholder="ex: CQ.7016.05/08/2026"></div>
       </div>
-      <div class="field" style="margin-top:8px; max-width:320px;"><label>Foto(s)/vídeo(s) do item (opcional)</label><input type="file" id="d-sn-foto" accept="image/*,video/*" multiple></div>
+      <div class="field" style="margin-top:8px; max-width:320px;"><label>Foto(s)/vídeo(s) do item (opcional)</label><input type="file" id="d-sn-foto" accept="image/*,video/*,.dwg,.dxf,.stl,.step,.stp,.x_t,.x_b" multiple></div>
       <div class="nota-list" id="lista-itens-doc-semnota" style="margin-top:12px;"></div>
       <button class="btn small" style="margin-top:12px;" onclick="gerarDocumentoSemNota('${p.id}')">Gerar documento sem nota</button>
       ` : `<div class="detail-sub" style="margin:0 0 10px;">Apenas o admin pode gerar o documento de saída sem nota.</div>`}
@@ -4638,13 +4638,13 @@ function openDetail(id){
         <div class="field"><label>Valor do item</label><input id="d-nota-item-valor" placeholder="R$" oninput="formatarMoedaInput(this)"></div>
         <button class="btn small" type="button" onclick="adicionarItemNota()">Adicionar item</button>
       </div>
-      <div class="field" style="margin-top:8px; max-width:320px;"><label>Foto(s)/vídeo(s) do item (opcional)</label><input type="file" id="d-nota-item-foto" accept="image/*,video/*" multiple></div>
+      <div class="field" style="margin-top:8px; max-width:320px;"><label>Foto(s)/vídeo(s) do item (opcional)</label><input type="file" id="d-nota-item-foto" accept="image/*,video/*,.dwg,.dxf,.stl,.step,.stp,.x_t,.x_b" multiple></div>
       <div class="nota-list" id="lista-itens-nota-atual" style="margin-top:10px;"></div>
       <div class="grid2" style="margin-top:10px;">
         <div class="field"><label>Peso bruto (kg)</label><input id="d-notaPesoBruto" placeholder="ex: 120,5" value="${notaEmEdicao?.pesoBruto||''}"></div>
         <div class="field"><label>Peso líquido (kg)</label><input id="d-notaPesoLiquido" placeholder="ex: 115,0" value="${notaEmEdicao?.pesoLiquido||''}"></div>
       </div>
-      <div class="field" style="margin-top:8px; max-width:320px;"><label>${notaEmEdicao ? 'Anexar mais foto(s)/vídeo(s) (opcional — some às já salvas)' : 'Foto(s)/vídeo(s) (opcional)'}</label><input type="file" id="d-notaFoto" accept="image/*,video/*" multiple></div>
+      <div class="field" style="margin-top:8px; max-width:320px;"><label>${notaEmEdicao ? 'Anexar mais foto(s)/vídeo(s) (opcional — some às já salvas)' : 'Foto(s)/vídeo(s) (opcional)'}</label><input type="file" id="d-notaFoto" accept="image/*,video/*,.dwg,.dxf,.stl,.step,.stp,.x_t,.x_b" multiple></div>
       <button class="btn small" style="margin-top:10px;" onclick="gerarNota('${p.id}')">${notaEmEdicao ? 'Salvar edição' : 'Gerar nota'}</button>
       ` : `<div class="detail-sub" style="margin:0 0 10px;">Apenas o admin pode lançar faturamento.</div>`}
       <div class="nota-list" style="margin-top:14px;">${notasHtml}</div>
@@ -4812,7 +4812,7 @@ function openDetail(id){
                   <span style="cursor:pointer;" onclick="baixarCaminhoStorage('${escJs(f.path)}','${escJs(f.nome||'arquivo')}')">baixar</span> ·
                   <span style="cursor:pointer; color:#f87171;" onclick="removerFotoDevItemPedido('${p.id}', ${itemPedidoEditandoIdx}, ${fi})">remover</span>
                 </span>`).join('') : ''}</div>
-              <input type="file" id="d-item-dev-fotos" accept="image/*,application/pdf,video/*" multiple onchange="onSelecionarFotosDevItemPedido(this)">
+              <input type="file" id="d-item-dev-fotos" accept="image/*,application/pdf,video/*,.dwg,.dxf,.stl,.step,.stp,.x_t,.x_b" multiple onchange="onSelecionarFotosDevItemPedido(this)">
               <div class="detail-sub" id="d-item-dev-fotos-lista" style="margin-top:4px;"></div>
             </div>
           </div>
@@ -4881,7 +4881,7 @@ function openDetail(id){
           </div>
           ${p.desenhoArquivo ? `<div class="detail-sub" style="margin:6px 0 0;">Esse desenho foi anexado antes desta atualização — itens novos usam o desenho por item, na aba "Itens do pedido".</div>` : ''}
           <div class="grid2" style="margin-top:10px;">
-            <div class="field"><label>Anexar / substituir ordem de compra</label><input type="file" id="d-ocArquivo" accept="image/*,application/pdf"></div>
+            <div class="field"><label>Anexar / substituir ordem de compra</label><input type="file" id="d-ocArquivo" accept="image/*,application/pdf,.dwg,.dxf,.stl,.step,.stp,.x_t,.x_b"></div>
           </div>
           ${podeEditarGaleriaDoPedido(p) ? `<button type="button" class="btn small secondary" style="margin-top:10px;" onclick="salvarMidias('${p.id}')">Salvar mídias</button>` : ''}
         </div>
@@ -4902,7 +4902,7 @@ function openDetail(id){
           </div>
           ${podeEditarGaleriaDoPedido(p) ? `
           <div class="grid2" style="margin-top:10px;">
-            <div class="field"><label>Adicionar arquivo(s) direto na galeria</label><input type="file" id="d-galeria-novo-arquivo" accept="image/*,application/pdf,video/*" multiple></div>
+            <div class="field"><label>Adicionar arquivo(s) direto na galeria</label><input type="file" id="d-galeria-novo-arquivo" accept="image/*,application/pdf,video/*,.dwg,.dxf,.stl,.step,.stp,.x_t,.x_b" multiple></div>
             <button class="btn small secondary" type="button" style="align-self:end;" onclick="adicionarArquivoGaleriaPedido('${p.id}')">Adicionar à galeria</button>
           </div>
           ` : ''}
@@ -5352,12 +5352,21 @@ function removerItemNota(idx){
   renderItensNota();
 }
 
-// Classifica um arquivo (pelo nome) como 'foto' ou 'video' — usado nas
-// várias fotos/vídeos por item (migracao_4_7.sql).
+// Classifica um arquivo (pelo nome) como 'foto', 'video' ou 'arquivo' — usado
+// nas várias fotos/vídeos por item (migracao_4_7.sql) e, desde a Versão 4.9,
+// também nos arquivos de CAD/engenharia (dwg/dxf/parasolid/stl/step) que
+// passaram a poder ser anexados junto (pedido do usuário). Um arquivo de CAD
+// cai em 'arquivo' — tratado igual a vídeo nos pontos que só aceitam foto de
+// verdade (embutir no PDF de registro fotográfico, atualizar sozinho a foto
+// do cadastro) — só fica anexado/disponível pra abrir, nunca tentado como
+// imagem.
 function tipoArquivoPorNome(nome){
   const ext = (nome || '').split('.').pop().toLowerCase();
   const videoExts = ['mp4','mov','avi','webm','mkv','m4v','3gp'];
-  return videoExts.includes(ext) ? 'video' : 'foto';
+  const arquivoExts = ['dwg','dxf','stl','step','stp','x_t','x_b','xmt_txt','xmt_bin'];
+  if(videoExts.includes(ext)) return 'video';
+  if(arquivoExts.includes(ext)) return 'arquivo';
+  return 'foto';
 }
 // Sobe as fotos/vídeos novos de cada item da nota e junta com os que já
 // estavam salvos (caso de edição) — devolve os itens prontos pro payload
@@ -5610,9 +5619,12 @@ async function adicionarItemDocSemNota(){
   // foto só. Cada foto vira uma célula própria no "registro fotográfico" do
   // PDF (todas as fotos entram no PDF); vídeo só fica anexado (não entra no
   // PDF, só no Storage/galeria) — decisão tomada junto com o usuário.
+  // Versão 4.9: arquivo de CAD (dwg/dxf/parasolid/stl/step) anexado aqui
+  // segue a mesma regra do vídeo — só fica anexado, nunca é tratado como
+  // imagem (senão o PDF tentaria "abrir" o CAD como foto e dava errado).
   const fotosNovas = [], videosNovos = [];
   for(const f of arquivos){
-    if(tipoArquivoPorNome(f.name) === 'video'){
+    if(tipoArquivoPorNome(f.name) !== 'foto'){
       videosNovos.push(f);
     } else {
       const dataUrl = await lerArquivoComoDataURL(f);
@@ -7477,7 +7489,7 @@ function campoDesenhosCadastroHtml(chave, registro, soLeitura){
     <div class="detail-sub" style="margin:0 0 6px;">Pode anexar mais de um arquivo (imagem, PDF ou vídeo) — é puxado sozinho pro item quando esse código for usado num pedido.</div>
     <div id="${chave}-desenho-existentes"></div>
     <div id="${chave}-desenho-novos"></div>
-    <input type="file" id="${chave}-desenho-novo" accept="image/*,application/pdf,video/*" multiple onchange="onSelecionarDesenhoCadastro('${chave}', this)">
+    <input type="file" id="${chave}-desenho-novo" accept="image/*,application/pdf,video/*,.dwg,.dxf,.stl,.step,.stp,.x_t,.x_b" multiple onchange="onSelecionarDesenhoCadastro('${chave}', this)">
   </div>`;
 }
 function onSelecionarDesenhoCadastro(chave, input){
