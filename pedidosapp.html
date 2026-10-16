@@ -3148,7 +3148,14 @@ function adicionarItemFormulario(){
   }
   // Versão 4.7: item sem nenhum desenho anexado (nem manual, nem puxado do
   // cadastro) pede confirmação antes de continuar — não bloqueia, só avisa.
-  if(!temDesenhoItem('f-item')){
+  // Versão 4.11 (pedido do usuário): esse aviso só faz sentido pra fundidos e
+  // pra itens de discos em "Desenvolvimento" (código ainda não cadastrado) —
+  // um disco já cadastrado normalmente já tem o desenho no cadastro, então o
+  // aviso deixou de aparecer pra esse caso.
+  const cadastradoFA = tipoAtual === 'discos' && !!codigo && (itemFormularioDiscoId || encontrarDiscoPorCodigo(codigo));
+  const desenvolvimentoFA = tipoAtual === 'discos' && !!codigo && !cadastradoFA;
+  const precisaAvisoDesenhoFA = tipoAtual === 'fundidos' || desenvolvimentoFA;
+  if(precisaAvisoDesenhoFA && !temDesenhoItem('f-item')){
     confirmarAcao('É de extrema importância o desenho do item para o processo, deseja continuar?', finalizarAdicionarItemFormulario);
     return;
   }
@@ -5044,7 +5051,13 @@ async function adicionarItemPedido(id){
     return;
   }
   // Versão 4.7: item sem nenhum desenho anexado pede confirmação antes de continuar.
-  if(!temDesenhoItem('d-item')){
+  // Versão 4.11 (pedido do usuário): só pra fundidos e pra itens de discos em
+  // "Desenvolvimento" (código ainda não cadastrado) — ver mesma observação em
+  // adicionarItemFormulario.
+  const cadastradoAIP = p.tipo === 'discos' && !!codigo && (itemPedidoDiscoId || encontrarDiscoPorCodigo(codigo));
+  const desenvolvimentoAIP = p.tipo === 'discos' && !!codigo && !cadastradoAIP;
+  const precisaAvisoDesenhoAIP = p.tipo === 'fundidos' || desenvolvimentoAIP;
+  if(precisaAvisoDesenhoAIP && !temDesenhoItem('d-item')){
     confirmarAcao('É de extrema importância o desenho do item para o processo, deseja continuar?', ()=> finalizarAdicionarItemPedido(id));
     return;
   }
