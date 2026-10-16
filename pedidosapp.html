@@ -383,6 +383,12 @@
   table.cadastro-tabela tr:hover td{background:var(--hover-bg);}
   table.cadastro-tabela .acoes{white-space:nowrap; text-align:right;}
   table.cadastro-tabela .acoes span{color:var(--accent); cursor:pointer; font-weight:600; margin-left:10px; font-size:12px;}
+  /* Versão 4.10: linha de "visualizar"/"editar"/"últimas vendas" expandida
+     logo abaixo da linha do item — sem hover/zebra de linha normal, só o
+     painel por dentro. */
+  table.cadastro-tabela tr.cadastro-expand-row td{padding:0 12px 14px 12px; background:transparent;}
+  table.cadastro-tabela tr.cadastro-expand-row:hover td{background:transparent;}
+  table.cadastro-tabela tr.cadastro-expand-row .panel{margin-bottom:0;}
   .item-engenharia-box{
     background:var(--input-bg); border:1px dashed var(--border); border-radius:10px; padding:12px 14px; margin-top:10px;
   }
@@ -920,6 +926,7 @@
           <div class="field"><label>Valor de</label><input type="text" inputmode="decimal" id="filtro-valormin-saidas" placeholder="R$ mínimo" oninput="formatarMoedaInput(this); render()"></div>
           <div class="field"><label>Valor até</label><input type="text" inputmode="decimal" id="filtro-valormax-saidas" placeholder="R$ máximo" oninput="formatarMoedaInput(this); render()"></div>
           <div class="field"><label>Mês de entrada</label><select id="filtro-mes-saidas" onchange="render()"><option value="">Todos os meses</option></select></div>
+          <div class="field"><label>Mês da nota</label><select id="filtro-mesnota-saidas" onchange="render()"><option value="">Todos os meses</option></select></div>
           <div class="field"><label>Vendedor</label><select id="filtro-vendedor-saidas" onchange="render()"><option value="">Todos</option></select></div>
           <div class="field"><label>Status</label>
             <select id="filtro-status-saidas" onchange="render()">
@@ -979,6 +986,7 @@
           <div class="field"><label>Valor de</label><input type="text" inputmode="decimal" id="filtro-valormin-saidas-semnota" placeholder="R$ mínimo" oninput="formatarMoedaInput(this); render()"></div>
           <div class="field"><label>Valor até</label><input type="text" inputmode="decimal" id="filtro-valormax-saidas-semnota" placeholder="R$ máximo" oninput="formatarMoedaInput(this); render()"></div>
           <div class="field"><label>Mês de entrada</label><select id="filtro-mes-saidas-semnota" onchange="render()"><option value="">Todos os meses</option></select></div>
+          <div class="field"><label>Mês do documento</label><select id="filtro-mesnota-saidas-semnota" onchange="render()"><option value="">Todos os meses</option></select></div>
           <div class="field"><label>Vendedor</label><select id="filtro-vendedor-saidas-semnota" onchange="render()"><option value="">Todos</option></select></div>
           <div class="field"><label>Status</label>
             <select id="filtro-status-saidas-semnota" onchange="render()">
@@ -1086,7 +1094,6 @@
         <div class="cad-tipo-btn active" data-cadtipo="discos" onclick="setCadastroTipo('discos')">DISCOS</div>
         <div class="cad-tipo-btn" data-cadtipo="fundidos" onclick="setCadastroTipo('fundidos')">FUNDIDOS</div>
       </div>
-      <div id="ultimas-vendas-wrap"></div>
 
       <div id="cad-sub-discos">
       <div class="subhead">Cadastro central de discos — o "Código do item" do pedido busca aqui. Código completo = (polegada)(montagem)(código/modelo)(extensão), ex. "20TF1171-1", montado automaticamente.</div>
@@ -1212,6 +1219,8 @@
           </div>
           <div class="field"><label>Data de entrada — de</label><input type="date" id="rel-f-data-de"></div>
           <div class="field"><label>Data de entrada — até</label><input type="date" id="rel-f-data-ate"></div>
+          <div class="field"><label>Data da nota/saída — de</label><input type="date" id="rel-f-datasaida-de"></div>
+          <div class="field"><label>Data da nota/saída — até</label><input type="date" id="rel-f-datasaida-ate"></div>
           <div class="field" style="align-self:end;">
             <label style="display:flex; align-items:center; gap:6px; margin-bottom:0;">
               <input type="checkbox" id="rel-f-cancelados" style="width:auto;"> Incluir pedidos cancelados
@@ -1393,7 +1402,7 @@ async function iniciarSessao(user){
   document.getElementById('user-papel').textContent = profile.papel === 'admin' ? 'Administrativo' : 'Vendedor(a)';
   document.body.classList.toggle('is-admin', isAdmin());
   try{
-    await Promise.all([ loadData(), new Promise(r=> setTimeout(r, 700)) ]);
+    await Promise.all([ loadData(), new Promise(r=> setTimeout(r, 3000)) ]);
   } finally {
     // Sempre revela o painel, mesmo se `loadData()` falhar no meio do
     // caminho — melhor mostrar o painel (que já lida com erro por toast em
@@ -2619,6 +2628,24 @@ function buildMonthOptions(){
     sel.innerHTML = '<option value="">Todos os meses</option>' + arr.map(m=>`<option value="${m}">${labelMes(m)}</option>`).join('');
     sel.value = arr.includes(prev) ? prev : '';
   });
+
+  // Versão 4.10 (pedido do usuário): meses da NOTA/documento de saída — pros
+  // filtros "Mês da nota"/"Mês do documento" (Saídas / Saídas sem nota) e
+  // "Data da nota/saída" (Relatórios), separados do "Mês de entrada" acima.
+  const mesesNota = new Set();
+  pedidos.forEach(p=>{
+    (p.notas||[]).forEach(n=>{ if(n.data) mesesNota.add(n.data.slice(0,7)); });
+    (p.documentosSemNota||[]).forEach(d=>{ if(d.data) mesesNota.add(d.data.slice(0,7)); });
+  });
+  mesesNota.add(now.toISOString().slice(0,7));
+  const arrNota = Array.from(mesesNota).sort().reverse();
+  ['filtro-mesnota-saidas','filtro-mesnota-saidas-semnota'].forEach(id=>{
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">Todos os meses</option>' + arrNota.map(m=>`<option value="${m}">${labelMes(m)}</option>`).join('');
+    sel.value = arrNota.includes(prev) ? prev : '';
+  });
 }
 function labelMes(m){
   const [y, mo] = m.split('-');
@@ -2812,7 +2839,11 @@ function opcoesCodigoItensPedido(p){
     // é esse id que deixa o sistema saber qual das entregas foi escolhida de
     // verdade, em vez de só ter o código repetido em comum. Ver
     // `valItemIdSelecionado` e `pacoteQueCobreItem`.
-    return `<option value="${it.codigo}" data-item-id="${escAttr(it.dbId)}" data-descricao="${escAttr(it.descricao)}" data-quantidade="${escAttr(it.quantidade)}" data-valor="${escAttr(it.valorSemIPI)}">${rotulo}</option>`;
+    // Versão 4.11 (pedido do usuário): data-valorcomipi guarda o valor já COM
+    // IPI (quando se aplica — ver fatorIPI), pra faturamento por nota puxar
+    // sozinho o valor certo a faturar, sem precisar calcular 3,25% na mão.
+    const valorComIPI = parseValor(it.valorSemIPI) * fatorIPI(p);
+    return `<option value="${it.codigo}" data-item-id="${escAttr(it.dbId)}" data-descricao="${escAttr(it.descricao)}" data-quantidade="${escAttr(it.quantidade)}" data-valor="${escAttr(it.valorSemIPI)}" data-valorcomipi="${escAttr(valorComIPI)}">${rotulo}</option>`;
   }).join('');
   return `<option value="">Selecione o item do pedido...</option>${opcoes}<option value="__outro__">Outro / não está na lista</option>`;
 }
@@ -2824,9 +2855,14 @@ function opcoesCodigoItensPedido(p){
 // continua editável — se o valor faturado/despachado for diferente do que
 // entrou no pedido (ex.: pedido entrou R$ 500, faturamento saiu R$ 650), é só
 // digitar por cima.
+// Versão 4.11 (pedido do usuário): no faturamento por nota, "Valor do item"
+// puxa direto o valor COM IPI (`valorComIPI: true` → usa data-valorcomipi),
+// já que é esse o valor que realmente sai na nota fiscal — antes vinha sem
+// IPI e precisava calcular os 3,25% na mão. Na saída sem nota o IPI nunca se
+// aplica (regra do negócio), então continua puxando o valor sem IPI mesmo.
 const AUTOFILL_CAMPOS_POR_CODIGO = {
   'd-sn-codigo': { descricao: 'd-sn-descricao', quantidade: 'd-sn-qtd', valor: 'd-sn-valor' },
-  'd-nota-item-codigo': { quantidade: 'd-nota-item-qtd', valor: 'd-nota-item-valor' }
+  'd-nota-item-codigo': { quantidade: 'd-nota-item-qtd', valor: 'd-nota-item-valor', valorComIPI: true }
 };
 function onCodigoSelecionadoChange(selectId){
   const sel = document.getElementById(selectId);
@@ -2850,7 +2886,8 @@ function onCodigoSelecionadoChange(selectId){
       }
       if(alvos.valor){
         const campo = document.getElementById(alvos.valor);
-        if(campo) campo.value = opt.dataset.valor ? formatBRL(parseValor(opt.dataset.valor)) : '';
+        const fonte = alvos.valorComIPI ? opt.dataset.valorcomipi : opt.dataset.valor;
+        if(campo) campo.value = fonte ? formatBRL(parseValor(fonte)) : '';
       }
     }
   }
@@ -3463,7 +3500,9 @@ async function criarPedidoRapidoComUmItem({ nomeCliente, cnpj, tipo, dataEntrada
   const pedidoCompleto = await refetchPedido(inserted.id);
   const resultadoCadastro = await cadastrarItensNovosAutomaticamente(tipo, [{codigo}], nomeCliente);
   buildMonthOptions();
-  if(pedidoCompleto) notificarNovoPedido(pedidoCompleto);
+  // Versão 4.10 (pedido do usuário): o e-mail automático de novo pedido só
+  // dispara pro lançamento normal (Formulário completo) — "Pedido rápido" e
+  // "Itens prontos" (os dois passam por aqui) não mandam e-mail.
   return { pedidoCompleto, resultadoCadastro, numero: inserted.numero };
 }
 
@@ -3589,7 +3628,9 @@ async function duplicarPedido(id){
   }
   const pedidoCompleto = await refetchPedido(inserted.id);
   buildMonthOptions();
-  if(pedidoCompleto) notificarNovoPedido(pedidoCompleto);
+  // Versão 4.10 (pedido do usuário): "Duplicar pedido" também não manda mais
+  // o e-mail automático de novo pedido — só o lançamento pelo Formulário
+  // completo manda.
   showToast('Pedido duplicado como ' + (pedidoCompleto ? pedidoCompleto.id : inserted.numero) + ' — ajuste o que precisar (datas, PV, OC etc.) e salve.');
   render();
   openDetail(pedidoCompleto ? pedidoCompleto.id : inserted.numero);
@@ -3702,7 +3743,7 @@ function statusPedido(p){
 function isSemNota(p){ return p.notaTipo === 'Sem NF'; }
 
 // ---- busca ampliada + filtros (Pedidos, Pedidos sem nota, Saídas, Saídas sem nota, Cancelados) ----
-const FILTRO_CAMPOS = ['tipo','cliente','pv','codigo','valormin','valormax','mes','vendedor','status'];
+const FILTRO_CAMPOS = ['tipo','cliente','pv','codigo','valormin','valormax','mes','mesnota','vendedor','status'];
 const FILTRO_ABAS = ['pedidos','semnota','saidas','saidas-semnota','cancelados','itens-prontos'];
 
 function statusTextoParaAba(p, aba){
@@ -4072,6 +4113,11 @@ function render(){
   // uma coletada em momento diferente; misturar tudo numa linha só de pedido
   // fazia o pedido inteiro parecer "coletado" quando só uma nota tinha sido).
   const filtroColeta = document.getElementById('filtro-coleta-saidas')?.value || 'todos';
+  // Versão 4.10 (pedido do usuário): filtro novo "Mês da nota" — separado do
+  // "Mês de entrada" (que é do PEDIDO) — filtra pela data de cada NOTA em si.
+  // É checado por nota (não por pedido), igual já acontecia com a coleta,
+  // porque um pedido pode ter notas de meses diferentes.
+  const filtroMesNota = document.getElementById('filtro-mesnota-saidas')?.value || '';
   const buscaSaidas = (document.getElementById('busca-saidas')?.value || '').toLowerCase().trim();
   const pedidosSaidasFiltrados = emProd.filter(p=>{
     if(!pedidoPassaBusca(p, buscaSaidas, 'saidas')) return false;
@@ -4085,6 +4131,7 @@ function render(){
     const ns = computeNotaStatus(p);
     (p.notas||[]).forEach((n, idx)=>{
       if(filtroColeta!=='todos' && (n.coletaStatus||'aguardando') !== filtroColeta) return;
+      if(filtroMesNota && (n.data||'').slice(0,7) !== filtroMesNota) return;
       linhasSaidas++;
       const tr = document.createElement('tr');
       tr.innerHTML = `
@@ -4118,9 +4165,16 @@ function render(){
 
   const semNotaProntos = pedidosSemNota.filter(p=>(p.documentosSemNota||[]).length>0 && !p.cancelado);
   const filtroColetaSN = document.getElementById('filtro-coleta-semnota')?.value || 'todos';
+  // Versão 4.10 (pedido do usuário): filtro novo "Mês do documento" —
+  // separado do "Mês de entrada" — filtra pela data dos documentos de saída.
+  // Essa lista é uma linha por PEDIDO (não por documento, diferente de
+  // Saídas/Notas), então o pedido entra se TIVER algum documento no mês
+  // escolhido, não precisa ser o único.
+  const filtroMesDocSN = document.getElementById('filtro-mesnota-saidas-semnota')?.value || '';
   const buscaSaidasSN = (document.getElementById('busca-saidas-semnota')?.value || '').toLowerCase().trim();
   const semNotaFiltradosColeta = semNotaProntos.filter(p=>{
     if(filtroColetaSN!=='todos' && (p.coletaStatus||'aguardando') !== filtroColetaSN) return false;
+    if(filtroMesDocSN && !(p.documentosSemNota||[]).some(d=> (d.data||'').slice(0,7) === filtroMesDocSN)) return false;
     if(!pedidoPassaBusca(p, buscaSaidasSN, 'saidas-semnota')) return false;
     if(!pedidoPassaFiltros(p, 'saidas-semnota')) return false;
     return true;
@@ -6634,6 +6688,12 @@ function filtrosRelatorioAtuais(){
     situacao: document.getElementById('rel-f-situacao').value,
     dataDe: document.getElementById('rel-f-data-de').value,
     dataAte: document.getElementById('rel-f-data-ate').value,
+    // Versão 4.10 (pedido do usuário): filtro novo, separado do "Data de
+    // entrada" acima — filtra pela data da NOTA/documento de saída (quando o
+    // item foi faturado de fato), não pela data em que o pedido entrou. Os
+    // dois continuam disponíveis e funcionam juntos (AND) se usados ao mesmo tempo.
+    dataSaidaDe: document.getElementById('rel-f-datasaida-de').value,
+    dataSaidaAte: document.getElementById('rel-f-datasaida-ate').value,
     incluirCancelados: document.getElementById('rel-f-cancelados').checked
   };
 }
@@ -6647,6 +6707,8 @@ function linhaPassaFiltrosComuns(l, f){
   if(f.situacao && l.situacao !== f.situacao) return false;
   if(f.dataDe && (!l.dataEntrada || l.dataEntrada < f.dataDe)) return false;
   if(f.dataAte && (!l.dataEntrada || l.dataEntrada > f.dataAte)) return false;
+  if(f.dataSaidaDe && (!l.dataSaida || l.dataSaida < f.dataSaidaDe)) return false;
+  if(f.dataSaidaAte && (!l.dataSaida || l.dataSaida > f.dataSaidaAte)) return false;
   return true;
 }
 
@@ -6887,7 +6949,7 @@ function limparFiltroRelatorios(){
     const el = document.getElementById(id);
     if(el && !el.disabled) el.value='';
   });
-  ['rel-f-cliente','rel-f-pv','rel-f-data-de','rel-f-data-ate'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['rel-f-cliente','rel-f-pv','rel-f-data-de','rel-f-data-ate','rel-f-datasaida-de','rel-f-datasaida-ate'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('rel-f-cancelados').checked = false;
   document.getElementById('rel-resumo').textContent = 'Escolha os filtros e clique em "Gerar relatório".';
   document.getElementById('rel-preview-table').innerHTML = '';
@@ -7244,16 +7306,16 @@ function renderCadastroClientes(){
 // CADASTRO DE DISCOS — tela CRUD (Atualização 3.7)
 // ============================================================================
 let discoEditando = null;
-function abrirFormDisco(id, soLeitura){
-  discoEditando = id || null;
-  const d = id ? discosCadastro.find(x=>x.id===id) : null;
-  // Versão 4.2: se o código gravado já difere do montado pelas partes, ele foi
-  // editado à mão — mantém como manual pra não ser sobrescrito ao abrir.
-  codigoDiscoManual = !!(d && d.codigoCompleto && d.codigoCompleto !== codigoCompletoDisco(d));
-  clientesCadEdit.disco = (d?.clientes || []).slice();
+// Versão 4.10 (pedido do usuário): "visualizar"/"editar" um disco já
+// cadastrado abre logo ABAIXO da linha dele na tabela, em vez de subir pro
+// formulário lá no topo da tela — não precisa mais rolar pra lá e voltar pra
+// achar a linha de novo. "+ Novo disco" (sem id, nenhuma linha pra expandir)
+// continua abrindo no topo, como sempre. `discoFormHtml` é só o template —
+// reaproveitado nos dois lugares (topo ou embaixo da linha).
+let cadDiscoExpandido = null; // {id, soLeitura}
+function discoFormHtml(id, d, soLeitura){
   const ro = soLeitura ? 'disabled' : '';
-  const wrap = document.getElementById('form-disco-wrap');
-  wrap.innerHTML = `
+  return `
     <div class="panel" style="margin-bottom:14px;">
       <h2 class="secao">${soLeitura ? 'Visualizar disco' : (d ? 'Editar disco' : 'Novo disco')}</h2>
       <div class="grid2">
@@ -7290,10 +7352,37 @@ function abrirFormDisco(id, soLeitura){
       </div>
     </div>
   `;
-  if(d && codigoDiscoManual) document.getElementById('cad-disco-codigocompleto').value = d.codigoCompleto;
+}
+function inicializarControlesFormDisco(d, soLeitura){
+  if(d && codigoDiscoManual){ const el = document.getElementById('cad-disco-codigocompleto'); if(el) el.value = d.codigoCompleto; }
   atualizarPreviewCodigoDisco();
   renderChipsClientesCad('disco', soLeitura);
   renderDesenhoCadastro('cad-disco-desenho');
+}
+function abrirFormDisco(id, soLeitura){
+  discoEditando = id || null;
+  const d = id ? discosCadastro.find(x=>x.id===id) : null;
+  // Versão 4.2: se o código gravado já difere do montado pelas partes, ele foi
+  // editado à mão — mantém como manual pra não ser sobrescrito ao abrir.
+  codigoDiscoManual = !!(d && d.codigoCompleto && d.codigoCompleto !== codigoCompletoDisco(d));
+  clientesCadEdit.disco = (d?.clientes || []).slice();
+  const topWrap = document.getElementById('form-disco-wrap');
+  if(id){
+    // Editar/visualizar um disco já cadastrado: fecha o "+ Novo disco" no
+    // topo (se tiver aberto) e as últimas vendas dessa linha (não cabem os
+    // dois ao mesmo tempo), e expande embaixo da linha do disco.
+    if(topWrap) topWrap.innerHTML = '';
+    cadVendasExpandido = null;
+    cadDiscoExpandido = { id, soLeitura: !!soLeitura };
+    renderCadastroDiscos();
+  } else {
+    cadDiscoExpandido = null;
+    renderCadastroDiscos();
+    if(topWrap){
+      topWrap.innerHTML = discoFormHtml(id, d, soLeitura);
+      inicializarControlesFormDisco(d, soLeitura);
+    }
+  }
 }
 let codigoDiscoManual = false;
 function partesDiscoDoForm(){
@@ -7324,7 +7413,12 @@ function atualizarPreviewCodigoDisco(){
   if(!codigoDiscoManual) el.value = codigoCompletoDisco(partesDiscoDoForm());
   atualizarModoCodigoDisco();
 }
-function fecharFormDisco(){ discoEditando = null; document.getElementById('form-disco-wrap').innerHTML = ''; }
+function fecharFormDisco(){
+  discoEditando = null;
+  const topWrap = document.getElementById('form-disco-wrap');
+  if(topWrap) topWrap.innerHTML = '';
+  if(cadDiscoExpandido){ cadDiscoExpandido = null; renderCadastroDiscos(); }
+}
 async function salvarDisco(){
   const polegada = document.getElementById('cad-disco-polegada').value.trim();
   const montagem = document.getElementById('cad-disco-montagem').value.trim();
@@ -7377,6 +7471,8 @@ async function excluirDisco(id){
   const { error } = await sb.from('discos').delete().eq('id', id);
   if(error){ mostrarErroSupabase('Erro ao excluir disco', error); return; }
   showToast('Disco excluído do cadastro.');
+  if(cadDiscoExpandido && cadDiscoExpandido.id===id) cadDiscoExpandido = null;
+  if(cadVendasExpandido && cadVendasExpandido.tabela==='discos' && cadVendasExpandido.id===id) cadVendasExpandido = null;
   await recarregarCadastros();
   renderCadastroDiscos();
 }
@@ -7395,7 +7491,8 @@ function renderCadastroDiscos(){
   if(contagem) contagem.textContent = mostrar.length + ' de ' + lista.length + ' disco(s)' +
     (lista.length !== discosCadastro.length ? ' (filtrado de ' + discosCadastro.length + ' no total)' : '') +
     (lista.length > LIMITE ? ' — refine a busca pra ver o resto' : '');
-  tbody.innerHTML = mostrar.map(d=>`
+  tbody.innerHTML = mostrar.map(d=>{
+    const linha = `
     <tr>
       <td>${celulaFotoCadastro(d.fotoPath)}</td>
       <td><strong>${d.codigoCompleto||'-'}</strong></td>
@@ -7407,10 +7504,25 @@ function renderCadastroDiscos(){
       <td>${d.quantidadeSegmentos??'-'}</td>
       <td>${d.discosPorJogo??'-'}</td>
       <td>${labelExtensaoDisco(d.extensao)}</td>
-      <td class="acoes"><span onclick="mostrarUltimasVendas('${jsAttr(d.codigoCompleto||'')}')">últimas vendas</span><span onclick="abrirFormDisco('${d.id}', true)">visualizar</span>${isAdmin()?`<span onclick="excluirDisco('${d.id}')">excluir</span>`:''}</td>
-    </tr>
-  `).join('') || '<tr><td colspan="11" class="detail-sub">Nenhum disco encontrado.</td></tr>';
+      <td class="acoes"><span onclick="toggleUltimasVendas('discos','${d.id}','${jsAttr(d.codigoCompleto||'')}')">últimas vendas</span><span onclick="abrirFormDisco('${d.id}', true)">visualizar</span>${isAdmin()?`<span onclick="excluirDisco('${d.id}')">excluir</span>`:''}</td>
+    </tr>`;
+    // Versão 4.10 (pedido do usuário): "últimas vendas"/"visualizar" abrem
+    // numa linha própria, logo abaixo da linha do disco, em vez de lá em
+    // cima da tabela — não precisa mais rolar a tela pra ver o conteúdo e
+    // voltar pra achar a linha de novo.
+    let expand = '';
+    if(cadVendasExpandido && cadVendasExpandido.tabela==='discos' && cadVendasExpandido.id===d.id){
+      expand = `<tr class="cadastro-expand-row"><td colspan="11">${ultimasVendasHtml(cadVendasExpandido.codigo)}</td></tr>`;
+    } else if(cadDiscoExpandido && cadDiscoExpandido.id===d.id){
+      expand = `<tr class="cadastro-expand-row"><td colspan="11">${discoFormHtml(d.id, d, cadDiscoExpandido.soLeitura)}</td></tr>`;
+    }
+    return linha + expand;
+  }).join('') || '<tr><td colspan="11" class="detail-sub">Nenhum disco encontrado.</td></tr>';
   preencherMiniaturasCadastro(tbody);
+  if(cadDiscoExpandido){
+    const d = discosCadastro.find(x=>x.id===cadDiscoExpandido.id);
+    inicializarControlesFormDisco(d, cadDiscoExpandido.soLeitura);
+  }
 }
 
 // ============================================================================
@@ -7423,6 +7535,12 @@ function setCadastroTipo(tipo){
   const sd = document.getElementById('cad-sub-discos'); if(sd) sd.style.display = tipo==='discos' ? '' : 'none';
   const sf = document.getElementById('cad-sub-fundidos'); if(sf) sf.style.display = tipo==='fundidos' ? '' : 'none';
   fecharUltimasVendas();
+  // Troca de Discos/Fundidos fecha qualquer linha expandida (visualizar/
+  // editar) dos dois — os ids dos campos do formulário são os mesmos nos
+  // dois cadastros, então só um pode ficar aberto por vez.
+  cadDiscoExpandido = null; cadFundidoExpandido = null;
+  const wd = document.getElementById('form-disco-wrap'); if(wd) wd.innerHTML = '';
+  const wf = document.getElementById('form-fundido-wrap'); if(wf) wf.innerHTML = '';
   if(tipo==='fundidos') renderCadastroFundidos(); else renderCadastroDiscos();
 }
 
@@ -7536,13 +7654,14 @@ async function salvarDesenhosCadastro(tabela, id, chave){
 // Versão 4.0 — CADASTRO DE FUNDIDOS (código, descrição, peso, foto)
 // ============================================================================
 let fundidoEditando = null;
-function abrirFormFundido(id, preset, soLeitura){
-  fundidoEditando = id || null;
-  const f = id ? fundidosCadastro.find(x=>x.id===id) : (preset || null);
-  clientesCadEdit.fundido = (f?.clientes || []).slice();
+// Versão 4.10 (pedido do usuário): mesma mudança do cadastro de discos —
+// "visualizar"/"editar" um fundido já cadastrado abre logo abaixo da linha
+// dele na tabela, não mais no topo da tela. "+ Novo fundido" (sem id)
+// continua abrindo no topo.
+let cadFundidoExpandido = null; // {id, soLeitura}
+function fundidoFormHtml(id, f, soLeitura){
   const ro = soLeitura ? 'disabled' : '';
-  const wrap = document.getElementById('form-fundido-wrap');
-  wrap.innerHTML = `
+  return `
     <div class="panel" style="margin-bottom:14px;">
       <h2 class="secao">${soLeitura ? 'Visualizar fundido' : (id ? 'Editar fundido' : 'Novo fundido')}</h2>
       <div class="grid2">
@@ -7561,8 +7680,29 @@ function abrirFormFundido(id, preset, soLeitura){
       </div>
     </div>
   `;
+}
+function inicializarControlesFormFundido(soLeitura){
   renderChipsClientesCad('fundido', soLeitura);
   renderDesenhoCadastro('cad-fundido-desenho');
+}
+function abrirFormFundido(id, preset, soLeitura){
+  fundidoEditando = id || null;
+  const f = id ? fundidosCadastro.find(x=>x.id===id) : (preset || null);
+  clientesCadEdit.fundido = (f?.clientes || []).slice();
+  const topWrap = document.getElementById('form-fundido-wrap');
+  if(id){
+    if(topWrap) topWrap.innerHTML = '';
+    cadVendasExpandido = null;
+    cadFundidoExpandido = { id, soLeitura: !!soLeitura };
+    renderCadastroFundidos();
+  } else {
+    cadFundidoExpandido = null;
+    renderCadastroFundidos();
+    if(topWrap){
+      topWrap.innerHTML = fundidoFormHtml(id, f, soLeitura);
+      inicializarControlesFormFundido(soLeitura);
+    }
+  }
 }
 // ---- "Clientes que normalmente compram" — componente único, usado no
 // cadastro de fundidos (4.2) e, desde a 4.3, também no de discos ----
@@ -7616,7 +7756,12 @@ async function gravarCadastroComFallback(fazer, payload, colunasNovas){
   }
   return r;
 }
-function fecharFormFundido(){ fundidoEditando = null; const w = document.getElementById('form-fundido-wrap'); if(w) w.innerHTML = ''; }
+function fecharFormFundido(){
+  fundidoEditando = null;
+  const topWrap = document.getElementById('form-fundido-wrap');
+  if(topWrap) topWrap.innerHTML = '';
+  if(cadFundidoExpandido){ cadFundidoExpandido = null; renderCadastroFundidos(); }
+}
 function pesoParaBanco(v){
   const t = String(v==null?'':v).trim();
   if(!t) return null;
@@ -7664,6 +7809,8 @@ async function excluirFundido(id){
   const { error } = await sb.from('fundidos').delete().eq('id', id);
   if(error){ mostrarErroSupabase('Erro ao excluir fundido', error); return; }
   showToast('Fundido excluído do cadastro.');
+  if(cadFundidoExpandido && cadFundidoExpandido.id===id) cadFundidoExpandido = null;
+  if(cadVendasExpandido && cadVendasExpandido.tabela==='fundidos' && cadVendasExpandido.id===id) cadVendasExpandido = null;
   await recarregarCadastros();
   renderCadastroFundidos();
 }
@@ -7678,25 +7825,36 @@ function renderCadastroFundidos(){
   if(contagem) contagem.textContent = mostrar.length + ' de ' + lista.length + ' fundido(s)' +
     (lista.length !== fundidosCadastro.length ? ' (filtrado de ' + fundidosCadastro.length + ' no total)' : '') +
     (lista.length > LIMITE ? ' — refine a busca pra ver o resto' : '');
-  tbody.innerHTML = mostrar.map(f=>`
+  tbody.innerHTML = mostrar.map(f=>{
+    const linha = `
     <tr>
       <td>${celulaFotoCadastro(f.fotoPath)}</td>
       <td><strong>${escHtml(f.codigo||'-')}</strong></td>
       <td>${escHtml(f.descricao||'-')}</td>
       <td>${escHtml(f.liga||'-')}</td>
       <td>${f.peso!=null && f.peso!=='' ? escHtml(String(f.peso).replace('.',',')) : '-'}</td>
-      <td class="acoes"><span onclick="mostrarUltimasVendas('${jsAttr(f.codigo||'')}')">últimas vendas</span><span onclick="abrirFormFundido('${f.id}', null, true)">visualizar</span>${isAdmin()?`<span onclick="excluirFundido('${f.id}')">excluir</span>`:''}</td>
-    </tr>
-  `).join('') || '<tr><td colspan="6" class="detail-sub">Nenhum fundido cadastrado ainda.</td></tr>';
+      <td class="acoes"><span onclick="toggleUltimasVendas('fundidos','${f.id}','${jsAttr(f.codigo||'')}')">últimas vendas</span><span onclick="abrirFormFundido('${f.id}', null, true)">visualizar</span>${isAdmin()?`<span onclick="excluirFundido('${f.id}')">excluir</span>`:''}</td>
+    </tr>`;
+    let expand = '';
+    if(cadVendasExpandido && cadVendasExpandido.tabela==='fundidos' && cadVendasExpandido.id===f.id){
+      expand = `<tr class="cadastro-expand-row"><td colspan="6">${ultimasVendasHtml(cadVendasExpandido.codigo)}</td></tr>`;
+    } else if(cadFundidoExpandido && cadFundidoExpandido.id===f.id){
+      expand = `<tr class="cadastro-expand-row"><td colspan="6">${fundidoFormHtml(f.id, f, cadFundidoExpandido.soLeitura)}</td></tr>`;
+    }
+    return linha + expand;
+  }).join('') || '<tr><td colspan="6" class="detail-sub">Nenhum fundido cadastrado ainda.</td></tr>';
   preencherMiniaturasCadastro(tbody);
+  if(cadFundidoExpandido) inicializarControlesFormFundido(cadFundidoExpandido.soLeitura);
 }
 
 // ============================================================================
-// Versão 4.0 — "últimas vendas" de um item (abre em cima da lista)
+// Versão 4.0 — "últimas vendas" de um item — Versão 4.10 (pedido do
+// usuário): deixou de abrir numa área fixa em cima da lista pra abrir numa
+// linha própria, logo abaixo da linha do item na tabela, igual o
+// visualizar/editar do cadastro.
 // ============================================================================
-function mostrarUltimasVendas(codigo){
-  const wrap = document.getElementById('ultimas-vendas-wrap');
-  if(!wrap) return;
+let cadVendasExpandido = null; // {tabela:'discos'|'fundidos', id, codigo}
+function ultimasVendasHtml(codigo){
   const vendas = ultimasVendasDoCodigo(codigo, 10);
   const linhas = vendas.map(v=>`
     <tr class="rowlink" onclick="openDetail('${jsAttr(v.pedidoId)}')">
@@ -7708,7 +7866,7 @@ function mostrarUltimasVendas(codigo){
       <td>${v.porKg ? (escHtml(v.peso) + 'kg × ' + formatBRL(parseValor(v.valorKgUnit)) + '/kg') : (v.valorUnit!=null ? formatBRL(v.valorUnit) + '/peça' : '-')}</td>
       <td>${v.notas.length ? escHtml(v.notas.join(', ')) : '<span class="detail-sub" style="margin:0;">ainda sem nota</span>'}</td>
     </tr>`).join('');
-  wrap.innerHTML = `
+  return `
     <div class="panel" style="margin-bottom:14px;">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
         <h2 class="secao" style="margin:0;">Últimas vendas — ${escHtml(codigo)}</h2>
@@ -7719,9 +7877,26 @@ function mostrarUltimasVendas(codigo){
         <tbody>${linhas}</tbody></table></div>`
       : '<div class="detail-sub" style="margin:10px 0 0;">Nenhuma venda encontrada pra esse código.</div>'}
     </div>`;
-  wrap.scrollIntoView({behavior:'smooth', block:'start'});
 }
-function fecharUltimasVendas(){ const w = document.getElementById('ultimas-vendas-wrap'); if(w) w.innerHTML = ''; }
+function toggleUltimasVendas(tabela, id, codigo){
+  if(cadVendasExpandido && cadVendasExpandido.tabela===tabela && cadVendasExpandido.id===id){
+    cadVendasExpandido = null;
+  } else {
+    cadVendasExpandido = { tabela, id, codigo };
+    // Não cabem vendas e formulário abertos juntos na mesma linha — fecha
+    // qualquer visualizar/editar aberto (de qualquer um dos dois cadastros).
+    cadDiscoExpandido = null; cadFundidoExpandido = null;
+    const wd = document.getElementById('form-disco-wrap'); if(wd) wd.innerHTML = '';
+    const wf = document.getElementById('form-fundido-wrap'); if(wf) wf.innerHTML = '';
+  }
+  if(tabela==='discos') renderCadastroDiscos(); else renderCadastroFundidos();
+}
+function fecharUltimasVendas(){
+  const tabela = cadVendasExpandido && cadVendasExpandido.tabela;
+  cadVendasExpandido = null;
+  if(tabela==='discos') renderCadastroDiscos();
+  else if(tabela==='fundidos') renderCadastroFundidos();
+}
 
 // ============================================================================
 // IMPORTAÇÃO DE PLANILHA — Clientes e Discos (Atualização 3.7)
