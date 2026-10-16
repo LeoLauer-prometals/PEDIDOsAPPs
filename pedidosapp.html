@@ -87,6 +87,15 @@
     display: flex; justify-content: space-between; align-items: center;
   }
   .shell{display:flex; min-height:100vh;}
+  /* Versão 4.13 (correção): antes, a tela "shell" era escondida/mostrada via
+     JS mexendo direto no style="display:..." do elemento (estilo inline).
+     Estilo inline sempre vence qualquer regra de classe do CSS externo —
+     inclusive a regra `.shell{ display:block; }` do media query mobile logo
+     abaixo — então no celular a barra lateral/conteúdo continuavam no modo
+     "linha" (flex) de desktop e tudo ficava cortado/espremido na tela.
+     Agora o show/hide é só por classe (.shell-hidden), sem nenhum estilo
+     inline no elemento, então a regra mobile funciona normalmente. */
+  .shell.shell-hidden{display:none;}
   .sidebar{
     width:216px; flex-shrink:0;
     background:var(--bg2);
@@ -547,7 +556,7 @@
   <div class="subhead" id="loading-subtitulo">Carregando seus pedidos...</div>
 </div>
 
-<div class="shell" id="shell" style="display:none">
+<div class="shell shell-hidden" id="shell">
   <div class="mobile-topbar">
     <button class="hamburger-btn" type="button" onclick="toggleSidebarMobile()" aria-label="Abrir menu">☰</button>
     <div class="brand-mobile">PROMETALS <span>PEDIDOS</span></div>
@@ -1447,7 +1456,7 @@ async function fazerLogout(){
   currentUser = null;
   currentProfile = null;
   pedidos = [];
-  document.getElementById('shell').style.display = 'none';
+  document.getElementById('shell').classList.add('shell-hidden');
   const loadingEl = document.getElementById('loading-screen');
   if(loadingEl) loadingEl.classList.remove('show');
   document.getElementById('login-screen').style.display = 'flex';
@@ -1486,7 +1495,7 @@ async function iniciarSessao(user){
     // caminho — melhor mostrar o painel (que já lida com erro por toast em
     // cada busca) do que deixar a pessoa presa na tela de carregamento.
     if(loadingEl) loadingEl.classList.remove('show');
-    document.getElementById('shell').style.display = 'flex';
+    document.getElementById('shell').classList.remove('shell-hidden');
   }
 }
 async function checarSessaoExistente(){
