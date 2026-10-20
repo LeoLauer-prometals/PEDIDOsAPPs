@@ -515,7 +515,19 @@
     .nota-grid .btn{ width:100%; }
     .kpis{ gap:12px; }
     .kpi-card{ min-width:0; flex:1 1 100%; padding:15px 16px; }
+    .kpi-card .valor{ font-size:20px; }
     .painel-grid{ grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px; }
+    /* Versão 4.14 (pedido do usuário: "deixar menor esses números nos
+       painéis para caber melhor") — os números dos cards do Painel de
+       controle (R$ 255.983,xx etc.) usavam o mesmo tamanho de fonte do
+       desktop (27px) mesmo depois de virar 2 colunas estreitas no celular, e
+       estouravam a largura do card. Reduz o card inteiro (ícone/valor/
+       padding) só no celular — acima de 860px nada muda. */
+    .painel-card{ padding:13px 14px; }
+    .painel-card .icon{ font-size:16px; margin-bottom:6px; }
+    .painel-card .valor{ font-size:18px; }
+    .painel-card .label{ font-size:10px; }
+    .painel-card .sub{ font-size:10.5px; }
     .galeria-grid{ grid-template-columns:repeat(auto-fit, minmax(135px,1fr)); }
     .detail-overlay{ padding:0; align-items:stretch; }
     .detail-card{ max-width:100%; width:100%; min-height:100vh; border-radius:0; padding:20px 16px; }
@@ -620,7 +632,7 @@
 
       <div class="panel">
         <h2 class="secao">Itens do pedido</h2>
-        <div class="subhead" style="margin-bottom:12px;">Adicione um código por vez. Cada código vira uma linha própria em Pedidos, mesmo pertencendo ao mesmo PV. O valor com IPI é calculado automaticamente (sem IPI + 3,25%).</div>
+        <div class="subhead" style="margin-bottom:12px;">Adicione um código por vez. Cada código vira uma linha própria em Pedidos, mesmo pertencendo ao mesmo PV. Informe o valor de 1 peça (ou de 1 kg) — o valor sem IPI da linha é calculado sozinho multiplicando pela quantidade, e o valor com IPI sai automaticamente desse total (+3,25%).</div>
         <div class="field" data-tipo="fundidos" style="margin-bottom:10px; max-width:320px;">
           <label>Precificação do item (fundidos)</label>
           <select id="f-item-precificacao" onchange="atualizarPrecificacaoItemFormulario()">
@@ -633,19 +645,30 @@
           <div class="field"><label>Valor do KG</label><input id="f-item-valorkgunit" placeholder="R$" oninput="formatarMoedaInput(this); calcularValorItemPorKg()"></div>
           <div class="field"><label>Valor calculado (sem IPI)</label><input id="f-item-valorcalculado" disabled></div>
         </div>
+        <!-- Versão 4.15 (pedido do usuário: "coloco R$50 no valor sem IPI e
+             quantidade 2, mas ele não faz a conversão de 2×50") — modo "por
+             peça" (discos sempre; fundidos quando não é "por KG") passa a
+             funcionar igual ao modo "por KG" acima: digita o valor de UMA
+             peça aqui, e "Valor sem IPI" (total da linha, mais abaixo) é
+             calculado automaticamente multiplicando pela quantidade — travado
+             pra edição direta, pra nunca ficar destravado do valor real. -->
+        <div class="field" id="f-item-peca-grid" style="margin-bottom:10px; max-width:320px;">
+          <label>Valor unitário (de 1 peça, sem IPI)</label>
+          <input id="f-item-valorunit" placeholder="R$" oninput="formatarMoedaInput(this); calcularValorItemPorKg();">
+        </div>
         <div class="detail-sub" id="aviso-edicao-item-formulario" style="display:none; margin-bottom:8px; color:var(--accent); font-weight:700;">
           Editando item — ajuste os campos abaixo e clique em "Salvar edição". <span class="x" style="color:var(--text-muted);" onclick="cancelarEdicaoItemFormulario()">cancelar edição</span>
         </div>
         <div class="nota-grid">
           <div class="field field-busca"><label>Código do item <span id="f-item-engenharia-status" class="detail-sub" style="font-weight:400;"></span></label><input id="f-item-codigo" autocomplete="off"><div class="busca-dropdown" id="f-item-codigo-dropdown"></div></div>
           <div class="field"><label>Quantidade</label><input id="f-item-qtd" oninput="calcularValorItemPorKg()"></div>
-          <div class="field"><label>Valor sem IPI</label><input id="f-item-valor" placeholder="R$" oninput="formatarMoedaInput(this)"></div>
+          <div class="field"><label>Valor sem IPI (total, calculado)</label><input id="f-item-valor" placeholder="R$" disabled></div>
           <button class="btn small" type="button" id="btn-adicionar-item-formulario" onclick="adicionarItemFormulario()">Adicionar item</button>
         </div>
         <div class="ultima-venda-hint" id="f-item-ultima-venda" style="display:none;"></div>
         <div class="grid2" style="margin-top:8px;">
           <div class="field"><label>Liga (deste item)</label><input id="f-item-liga"></div>
-          <div class="field"><label>Data de entrega (deste item)</label><input type="date" id="f-item-dataentrega"></div>
+          <div class="field"><label>Data de entrega (deste item) *</label><input type="date" id="f-item-dataentrega"></div>
         </div>
         <div class="field full" style="margin-top:8px;"><label>Descrição do item (usada no resumo do pedido)</label><input id="f-item-descricao" placeholder="ex: Disco de fricção 350mm"></div>
 
@@ -700,7 +723,7 @@
           </div>
           <div class="field"><label>Responsável pelo representante (quem recebe o bônus)</label><select id="f-representanteResp"></select></div>
           <div class="field"><label>% de bônus sobre a venda</label><input id="f-bonus" placeholder="ex: 2"></div>
-          <div class="field"><label>Condição de pagamento</label><input id="f-condicao" placeholder="ex: 30 DDL"></div>
+          <div class="field"><label>Condição de pagamento *</label><input id="f-condicao" placeholder="ex: 30 DDL"></div>
           <div class="field"><label>Pedido com ou sem nota?</label>
             <select id="f-nota"><option value="">Selecione</option><option>Com NF</option><option>Sem NF</option></select>
           </div>
@@ -1879,11 +1902,14 @@ function calcularValorPorPrefixo(prefixo){
   if(prefixo === 'f-item') calcularValorItemPorKg(); else calcularValorItemPorKgPedido();
 }
 function aplicarValorPecaSugerido(prefixo){
+  // Versão 4.15: o preço sugerido da última venda (por peça) agora preenche
+  // o campo "Valor unitário" — o total ("Valor sem IPI") sai sozinho dali,
+  // calculado junto com a quantidade (ver calcularValorPorPrefixo).
   const unit = valorPecaSugeridoUnit[prefixo];
   if(unit == null) return;
-  const qtd = parseValor(val(prefixo + '-qtd')) || 1;
-  const el = document.getElementById(prefixo + '-valor');
-  if(el) el.value = formatBRL(unit * qtd);
+  const el = document.getElementById(prefixo + '-valorunit');
+  if(el) el.value = formatBRL(unit);
+  calcularValorPorPrefixo(prefixo);
 }
 var ligaFundidoAplicada = { 'f-item': '', 'd-item': '' };
 function aplicarFundidoAoItem(prefixo, f, opts){
@@ -2903,8 +2929,10 @@ function inicializarBuscasFormulario(){
       atualizarStatusEngenhariaItemFormulario();
     }, 200);
   });
-  // digitou o valor à mão → para de recalcular o valor da peça sozinho
-  document.getElementById('f-item-valor').addEventListener('input', ()=>{ valorPecaSugeridoUnit['f-item'] = null; });
+  // Versão 4.15: "Valor sem IPI" (f-item-valor) virou campo travado/calculado
+  // — quem o usuário digita à mão agora é "Valor unitário" (f-item-valorunit,
+  // ver calcularValorItemPorKg), então não há mais nada a "parar de
+  // recalcular" aqui.
   document.getElementById('f-item-descricao').addEventListener('input', ()=>{ itemFormularioDescricaoManual = true; });
 }
 let clienteSelecionadoFormulario = null;
@@ -3028,24 +3056,34 @@ function limparCodigoSelecionado(selectId){
 function atualizarPrecificacaoItemFormulario(){
   const modo = document.getElementById('f-item-precificacao')?.value || 'peca';
   const kgGrid = document.getElementById('f-item-kg-grid');
-  const valorInput = document.getElementById('f-item-valor');
+  const pecaGrid = document.getElementById('f-item-peca-grid');
   const mostrarKg = (tipoAtual === 'fundidos' && modo === 'kg');
   if(kgGrid) kgGrid.style.display = mostrarKg ? 'grid' : 'none';
-  if(valorInput) valorInput.readOnly = mostrarKg;
+  // Versão 4.15: "Valor unitário" (modo por peça) só aparece quando não está
+  // no modo "por KG" — os dois modos nunca ficam visíveis ao mesmo tempo.
+  if(pecaGrid) pecaGrid.style.display = mostrarKg ? 'none' : '';
 }
 function calcularValorItemPorKg(){
-  // Versão 4.0: só recalcula o valor no modo "por KG". No modo "por peça",
-  // antes, mexer na quantidade apagava o valor já digitado — agora só
-  // atualiza se o valor veio sugerido da última venda (preço da peça × qtd).
+  // Versão 4.15 (pedido do usuário: "o valor sem IPI não multiplica pela
+  // quantidade") — "Valor sem IPI" deixou de ser digitado direto: agora é
+  // SEMPRE calculado (travado pra edição) a partir de um valor unitário ×
+  // quantidade — igual já funcionava no modo "por KG" (peso × valor do kg ×
+  // quantidade), só que agora vale pro modo "por peça" também (discos
+  // sempre usam esse modo).
   const modo = document.getElementById('f-item-precificacao')?.value || 'peca';
-  if(tipoAtual !== 'fundidos' || modo !== 'kg'){ aplicarValorPecaSugerido('f-item'); return; }
-  const peso = parseValor(val('f-item-peso'));
-  const valorKgUnit = parseValor(val('f-item-valorkgunit'));
-  const quantidade = parseValor(val('f-item-qtd')) || 1;
-  const total = peso * valorKgUnit * quantidade;
-  const calcEl = document.getElementById('f-item-valorcalculado');
-  if(calcEl) calcEl.value = total ? formatBRL(total) : '';
   const valorInput = document.getElementById('f-item-valor');
+  const quantidade = parseValor(val('f-item-qtd')) || 1;
+  if(tipoAtual === 'fundidos' && modo === 'kg'){
+    const peso = parseValor(val('f-item-peso'));
+    const valorKgUnit = parseValor(val('f-item-valorkgunit'));
+    const total = peso * valorKgUnit * quantidade;
+    const calcEl = document.getElementById('f-item-valorcalculado');
+    if(calcEl) calcEl.value = total ? formatBRL(total) : '';
+    if(valorInput) valorInput.value = total ? formatBRL(total) : '';
+    return;
+  }
+  const valorUnit = parseValor(val('f-item-valorunit'));
+  const total = valorUnit * quantidade;
   if(valorInput) valorInput.value = total ? formatBRL(total) : '';
 }
 function atualizarFaturamentoFormulario(){
@@ -3248,7 +3286,13 @@ function adicionarItemFormulario(){
   const codigo = val('f-item-codigo');
   const quantidade = val('f-item-qtd');
   const valorSemIPI = val('f-item-valor');
-  if(!codigo || !quantidade || !valorSemIPI){ showToast('Preencha código, quantidade e valor sem IPI do item.'); return; }
+  if(!codigo || !quantidade || !valorSemIPI){ showToast('Preencha código, quantidade e valor (unitário ou por kg) do item.'); return; }
+  // Versão 4.15 (pedido do usuário): data de entrega do item passa a ser obrigatória.
+  if(!val('f-item-dataentrega')){
+    showToast('Informe a data de entrega deste item — é obrigatória.');
+    document.getElementById('f-item-dataentrega').focus();
+    return;
+  }
   // Versão 4.7: entrega do modelo passa a ser obrigatória em itens de fundidos.
   if(tipoAtual === 'fundidos' && !val('f-item-fundido-entregamodelo')){
     showToast('Informe a entrega do modelo — é obrigatório em itens de fundidos.');
@@ -3308,6 +3352,7 @@ function finalizarAdicionarItemFormulario(){
   document.getElementById('f-item-codigo').value='';
   document.getElementById('f-item-qtd').value='';
   document.getElementById('f-item-valor').value='';
+  document.getElementById('f-item-valorunit').value='';
   document.getElementById('f-item-descricao').value='';
   document.getElementById('f-item-liga').value='';
   document.getElementById('f-item-dataentrega').value='';
@@ -3334,12 +3379,17 @@ function editarItemFormulario(i){
   itemFundidoCodigoAplicado['f-item'] = normCodigo(it.codigo);
   valorPecaSugeridoUnit['f-item'] = null;
   const precifSel = document.getElementById('f-item-precificacao');
+  const qtdNum = parseFloat(String(it.quantidade||'').replace(',','.')) || 0;
   if(it.peso && it.valorKgUnit){
     document.getElementById('f-item-peso').value = it.peso;
     document.getElementById('f-item-valorkgunit').value = it.valorKgUnit;
+    document.getElementById('f-item-valorunit').value = '';
     if(precifSel){ precifSel.value = 'kg'; atualizarPrecificacaoItemFormulario(); }
-  } else if(precifSel){
-    precifSel.value = 'peca'; atualizarPrecificacaoItemFormulario();
+  } else {
+    // Versão 4.15: reconstrói o "valor unitário" a partir do total salvo ÷
+    // quantidade, pra reabrir a edição já com o campo coerente.
+    document.getElementById('f-item-valorunit').value = qtdNum ? formatBRL(parseValor(it.valorSemIPI) / qtdNum) : '';
+    if(precifSel){ precifSel.value = 'peca'; atualizarPrecificacaoItemFormulario(); }
   }
   const aviso = document.getElementById('aviso-edicao-item-formulario');
   if(aviso) aviso.style.display = '';
@@ -3352,6 +3402,7 @@ function cancelarEdicaoItemFormulario(){
   document.getElementById('f-item-codigo').value='';
   document.getElementById('f-item-qtd').value='';
   document.getElementById('f-item-valor').value='';
+  document.getElementById('f-item-valorunit').value='';
   document.getElementById('f-item-descricao').value='';
   document.getElementById('f-item-liga').value='';
   document.getElementById('f-item-dataentrega').value='';
@@ -3462,9 +3513,11 @@ function textoResultadoCadastroAutomatico(r){
 }
 
 async function lancarPedido(){
-  const required = ['f-nomecliente','f-cnpj'];
+  // Versão 4.15 (pedido do usuário): condição de pagamento passa a ser
+  // obrigatória pra lançar o pedido (fica 1x por pedido, não por item).
+  const required = ['f-nomecliente','f-cnpj','f-condicao'];
   for(const id of required){
-    if(!val(id)){ showToast('Preencha nome do cliente e CNPJ.'); document.getElementById(id).focus(); return; }
+    if(!val(id)){ showToast('Preencha nome do cliente, CNPJ e condição de pagamento.'); document.getElementById(id).focus(); return; }
   }
   if(itensFormulario.length === 0){ showToast('Adicione ao menos um item do pedido.'); return; }
   // captura agora (antes de qualquer espera) o tipo e os itens — se alguém
@@ -4683,6 +4736,12 @@ function openDetail(id){
   // faz um UPDATE em vez de INSERT quando há um item em edição.
   if(itemPedidoEditandoPedidoId !== id){ itemPedidoEditandoIdx = null; itemPedidoEditandoPedidoId = id; }
   const itemEmEdicao = (itemPedidoEditandoIdx != null) ? (p.itens||[])[itemPedidoEditandoIdx] : null;
+  // Versão 4.15: "valor unitário" explícito (mesma mudança do Formulário de
+  // pedido) — só pra pré-marcar o modo kg/peça e pré-preencher os campos ao
+  // editar um item já salvo.
+  const itemEmEdicaoPorKg = !!(itemEmEdicao && itemEmEdicao.peso && itemEmEdicao.valorKgUnit);
+  const itemEmEdicaoQtd = itemEmEdicao ? (parseFloat(String(itemEmEdicao.quantidade||'').replace(',','.')) || 0) : 0;
+  const itemEmEdicaoValorUnit = (itemEmEdicao && !itemEmEdicaoPorKg && itemEmEdicaoQtd) ? formatBRL(parseValor(itemEmEdicao.valorSemIPI) / itemEmEdicaoQtd) : '';
 
   // Edição de nota já lançada (mesma ideia da edição de item acima): "editar"
   // reaproveita o formulário de "Gerar nota", pré-preenchendo nº/pesos e os
@@ -4890,7 +4949,7 @@ function openDetail(id){
             <div class="field"><label>Vendedor</label>
               <select id="d-vendedor">${vendedorOptions(p.vendedor||'')}</select>
             </div>
-            <div class="field"><label>Condição de pagamento</label><input id="d-condicao" value="${p.condicao||''}"></div>
+            <div class="field"><label>Condição de pagamento *</label><input id="d-condicao" value="${p.condicao||''}"></div>
             <div class="field"><label>Nota</label>
               <select id="d-notaTipo">
                 <option value="">Selecione</option>
@@ -4929,27 +4988,35 @@ function openDetail(id){
           <div class="field" style="margin-bottom:10px; max-width:320px;">
             <label>Precificação do item</label>
             <select id="d-item-precificacao" onchange="atualizarPrecificacaoItemPedido()">
-              <option value="peca" ${(itemEmEdicao && itemEmEdicao.peso && itemEmEdicao.valorKgUnit)?'':'selected'}>Por peça (valor direto)</option>
-              <option value="kg" ${(itemEmEdicao && itemEmEdicao.peso && itemEmEdicao.valorKgUnit)?'selected':''}>Por KG (peso × valor do kg)</option>
+              <option value="peca" ${itemEmEdicaoPorKg?'':'selected'}>Por peça (valor direto)</option>
+              <option value="kg" ${itemEmEdicaoPorKg?'selected':''}>Por KG (peso × valor do kg)</option>
             </select>
           </div>
-          <div class="nota-grid" id="d-item-kg-grid" style="display:${(itemEmEdicao && itemEmEdicao.peso && itemEmEdicao.valorKgUnit) ? '' : 'none'}; margin-bottom:10px;">
+          <div class="nota-grid" id="d-item-kg-grid" style="display:${itemEmEdicaoPorKg ? '' : 'none'}; margin-bottom:10px;">
             <div class="field"><label>Peso unitário (kg)</label><input id="d-item-peso" placeholder="ex: 12,5" value="${itemEmEdicao?.peso||''}" oninput="calcularValorItemPorKgPedido()"></div>
             <div class="field"><label>Valor do KG</label><input id="d-item-valorkgunit" placeholder="R$" value="${itemEmEdicao?.valorKgUnit||''}" oninput="formatarMoedaInput(this); calcularValorItemPorKgPedido()"></div>
             <div class="field"><label>Valor calculado (sem IPI)</label><input id="d-item-valorcalculado" disabled></div>
           </div>
           ` : ''}
+          <!-- Versão 4.15 (mesma correção do Formulário de pedido): modo "por
+               peça" (discos sempre; fundidos quando não é "por KG") — digita o
+               valor de UMA peça aqui, "Valor sem IPI" (total) é calculado
+               sozinho multiplicando pela quantidade. -->
+          <div class="field" id="d-item-peca-grid" style="${(p.tipo==='fundidos' && itemEmEdicaoPorKg) ? 'display:none;' : ''} margin-bottom:10px; max-width:320px;">
+            <label>Valor unitário (de 1 peça, sem IPI)</label>
+            <input id="d-item-valorunit" placeholder="R$" value="${itemEmEdicaoValorUnit}" oninput="formatarMoedaInput(this); calcularValorItemPorKgPedido();">
+          </div>
           ${itemEmEdicao ? `<div class="detail-sub" style="margin-bottom:8px; color:var(--accent); font-weight:700;">Editando o item ${itemEmEdicao.codigo||'-'} — ajuste os campos abaixo e clique em "Salvar edição". <span class="x" style="color:var(--text-muted);" onclick="cancelarEdicaoItemPedido('${p.id}')">cancelar edição</span></div>` : ''}
           <div class="nota-grid">
             <div class="field field-busca"><label>Código do item <span id="d-item-engenharia-status" class="detail-sub" style="font-weight:400;"></span></label><input id="d-item-codigo" value="${itemEmEdicao?.codigo||''}" autocomplete="off"><div class="busca-dropdown" id="d-item-codigo-dropdown"></div></div>
             <div class="field"><label>Quantidade</label><input id="d-item-qtd" value="${itemEmEdicao?.quantidade||''}" oninput="calcularValorItemPorKgPedido()"></div>
-            <div class="field"><label>Valor sem IPI</label><input id="d-item-valor" placeholder="R$" value="${itemEmEdicao?formatBRL(parseValor(itemEmEdicao.valorSemIPI)):''}" oninput="formatarMoedaInput(this)"></div>
+            <div class="field"><label>Valor sem IPI (total, calculado)</label><input id="d-item-valor" placeholder="R$" value="${itemEmEdicao?formatBRL(parseValor(itemEmEdicao.valorSemIPI)):''}" disabled></div>
             <button class="btn small" onclick="adicionarItemPedido('${p.id}')">${itemEmEdicao?'Salvar edição':'Adicionar'}</button>
           </div>
           <div class="ultima-venda-hint" id="d-item-ultima-venda" style="display:none;"></div>
           <div class="grid2" style="margin-top:8px;">
             <div class="field"><label>Liga (deste item)</label><input id="d-item-liga" value="${itemEmEdicao?.liga||''}"></div>
-            <div class="field"><label>Data de entrega (deste item)</label><input type="date" id="d-item-dataentrega" value="${itemEmEdicao?.dataEntrega||''}"></div>
+            <div class="field"><label>Data de entrega (deste item) *</label><input type="date" id="d-item-dataentrega" value="${itemEmEdicao?.dataEntrega||''}"></div>
           </div>
           <div class="field full" style="margin-top:8px;"><label>Descrição do item (usada no resumo do pedido)</label><input id="d-item-descricao" value="${itemEmEdicao?.descricao||''}"></div>
 
@@ -5130,20 +5197,29 @@ function closeDetail(){ document.getElementById('overlay').style.display='none';
 function atualizarPrecificacaoItemPedido(){
   const modo = document.getElementById('d-item-precificacao')?.value || 'peca';
   const kgGrid = document.getElementById('d-item-kg-grid');
-  const valorInput = document.getElementById('d-item-valor');
+  const pecaGrid = document.getElementById('d-item-peca-grid');
   if(kgGrid) kgGrid.style.display = (modo === 'kg') ? 'grid' : 'none';
-  if(valorInput) valorInput.readOnly = (modo === 'kg');
+  // Versão 4.15: ver mesma mudança em atualizarPrecificacaoItemFormulario.
+  if(pecaGrid) pecaGrid.style.display = (modo === 'kg') ? 'none' : '';
 }
 function calcularValorItemPorKgPedido(){
+  // Versão 4.15: ver mesma mudança em calcularValorItemPorKg — "Valor sem
+  // IPI" passa a ser sempre calculado (travado), a partir do valor unitário
+  // (ou do kg) × quantidade.
   const modo = document.getElementById('d-item-precificacao')?.value || 'peca';
-  if(modo !== 'kg'){ aplicarValorPecaSugerido('d-item'); return; }
-  const peso = parseValor(val('d-item-peso'));
-  const valorKgUnit = parseValor(val('d-item-valorkgunit'));
-  const quantidade = parseValor(val('d-item-qtd')) || 1;
-  const total = peso * valorKgUnit * quantidade;
-  const calcEl = document.getElementById('d-item-valorcalculado');
-  if(calcEl) calcEl.value = total ? formatBRL(total) : '';
   const valorInput = document.getElementById('d-item-valor');
+  const quantidade = parseValor(val('d-item-qtd')) || 1;
+  if(modo === 'kg'){
+    const peso = parseValor(val('d-item-peso'));
+    const valorKgUnit = parseValor(val('d-item-valorkgunit'));
+    const total = peso * valorKgUnit * quantidade;
+    const calcEl = document.getElementById('d-item-valorcalculado');
+    if(calcEl) calcEl.value = total ? formatBRL(total) : '';
+    if(valorInput) valorInput.value = total ? formatBRL(total) : '';
+    return;
+  }
+  const valorUnit = parseValor(val('d-item-valorunit'));
+  const total = valorUnit * quantidade;
   if(valorInput) valorInput.value = total ? formatBRL(total) : '';
 }
 
@@ -5152,7 +5228,13 @@ async function adicionarItemPedido(id){
   const codigo = val('d-item-codigo');
   const quantidade = val('d-item-qtd');
   const valorSemIPI = val('d-item-valor');
-  if(!codigo || !quantidade || !valorSemIPI){ showToast('Preencha código, quantidade e valor sem IPI.'); return; }
+  if(!codigo || !quantidade || !valorSemIPI){ showToast('Preencha código, quantidade e valor (unitário ou por kg).'); return; }
+  // Versão 4.15 (pedido do usuário): data de entrega do item passa a ser obrigatória.
+  if(!val('d-item-dataentrega')){
+    showToast('Informe a data de entrega deste item — é obrigatória.');
+    document.getElementById('d-item-dataentrega').focus();
+    return;
+  }
   // Versão 4.7: entrega do modelo passa a ser obrigatória em itens de fundidos.
   if(p.tipo === 'fundidos' && !val('d-item-fundido-entregamodelo')){
     showToast('Informe a entrega do modelo — é obrigatório em itens de fundidos.');
@@ -5330,8 +5412,8 @@ function inicializarBuscaItemPedido(itemEmEdicao, tipoPedido){
         atualizarStatusFundidoItemPedido();
       }, 200);
     });
-    const valorEl = document.getElementById('d-item-valor');
-    if(valorEl) valorEl.addEventListener('input', ()=>{ valorPecaSugeridoUnit['d-item'] = null; });
+    // Versão 4.15: "Valor sem IPI" (d-item-valor) virou campo travado/
+    // calculado — ver mesma observação em inicializarBuscasFormulario.
     atualizarStatusFundidoItemPedido();
     return;
   }
@@ -6128,6 +6210,13 @@ function onColetaStatusChange(){
 async function salvarDetalhe(id){
   const p = pedidos.find(x=>x.id===id);
   if(!p) return;
+
+  // Versão 4.15 (pedido do usuário): condição de pagamento passa a ser obrigatória.
+  if(!val('d-condicao')){
+    showToast('Preencha a condição de pagamento.');
+    document.getElementById('d-condicao').focus();
+    return;
+  }
 
   const payload = {
     nome_cliente: val('d-nomeCliente'),
