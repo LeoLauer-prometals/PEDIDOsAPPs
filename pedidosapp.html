@@ -2967,8 +2967,21 @@ function val(id){ const el = document.getElementById(id); return el ? el.value.t
 function opcoesCodigoItensPedido(p){
   const itens = (p.itens || []).filter(it => it.codigo);
   const escAttr = (s) => String(s==null?'':s).replace(/"/g, '&quot;');
+  // Versão 4.16 (pedido do usuário: "porque itens já faturados e coletados
+  // aparecem pra faturar de novo?") — item cuja quantidade já foi faturada
+  // por completo (mesma conta de `quantidadeFaturadaItem` usada no chip
+  // "X/Y" da lista de itens) não entra mais nesse menu, pra não dar pra
+  // selecionar de novo por engano. Item faturado só PARCIALMENTE continua
+  // aparecendo (ainda falta faturar o resto) — rótulo ganha "· faltam N" e a
+  // quantidade sugerida ao escolher o item já vem só com o restante, não a
+  // quantidade cheia (que já foi parcialmente faturada).
   const opcoes = itens.map(it => {
-    const rotulo = it.codigo + (it.descricao ? (' — ' + it.descricao.slice(0,50)) : '') + (it.quantidade ? (' (qtd ' + it.quantidade + ')') : '') + (it.dataEntrega ? (' · entrega ' + formatarDataBR(it.dataEntrega)) : '');
+    const qtdTotal = numQtd(it.quantidade);
+    const qtdFaturada = quantidadeFaturadaItem(p, it);
+    const qtdRestante = qtdTotal - qtdFaturada;
+    if(qtdTotal > 0 && qtdRestante <= 0.0001) return ''; // já faturado por completo — some do menu
+    const temParcial = qtdFaturada > 0.0001;
+    const rotulo = it.codigo + (it.descricao ? (' — ' + it.descricao.slice(0,50)) : '') + (it.quantidade ? (' (qtd ' + it.quantidade + ')') : '') + (it.dataEntrega ? (' · entrega ' + formatarDataBR(it.dataEntrega)) : '') + (temParcial ? (' · faltam ' + qtdRestante) : '');
     // `data-item-id` (Atualização 4.5) guarda o id do item exato do pedido
     // (it.dbId), além do código — quando o pedido tem mais de um item com o
     // MESMO código (ex.: duas entregas do mesmo disco em datas diferentes),
@@ -2978,8 +2991,13 @@ function opcoesCodigoItensPedido(p){
     // Versão 4.11 (pedido do usuário): data-valorcomipi guarda o valor já COM
     // IPI (quando se aplica — ver fatorIPI), pra faturamento por nota puxar
     // sozinho o valor certo a faturar, sem precisar calcular 3,25% na mão.
+    // (data-valor/data-valorcomipi continuam sendo o valor CHEIO do item,
+    // mesmo quando só o restante é sugerido na quantidade — limitação já
+    // documentada em `pacoteQueCobreItem`: o valor não é recalculado
+    // proporcionalmente, é só sugestão, sempre editável antes de gerar.)
     const valorComIPI = parseValor(it.valorSemIPI) * fatorIPI(p);
-    return `<option value="${it.codigo}" data-item-id="${escAttr(it.dbId)}" data-descricao="${escAttr(it.descricao)}" data-quantidade="${escAttr(it.quantidade)}" data-valor="${escAttr(it.valorSemIPI)}" data-valorcomipi="${escAttr(valorComIPI)}">${rotulo}</option>`;
+    const qtdSugerida = temParcial ? qtdRestante : it.quantidade;
+    return `<option value="${it.codigo}" data-item-id="${escAttr(it.dbId)}" data-descricao="${escAttr(it.descricao)}" data-quantidade="${escAttr(qtdSugerida)}" data-valor="${escAttr(it.valorSemIPI)}" data-valorcomipi="${escAttr(valorComIPI)}">${rotulo}</option>`;
   }).join('');
   return `<option value="">Selecione o item do pedido...</option>${opcoes}<option value="__outro__">Outro / não está na lista</option>`;
 }
