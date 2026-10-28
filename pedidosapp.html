@@ -877,7 +877,7 @@
       </div>
 
       <div class="toolbar">
-        <input type="text" id="busca-pedidos" placeholder="Buscar por tipo, cliente, PV, código ou descrição do item, valor, data, vendedor ou status..." oninput="render()">
+        <input type="text" id="busca-pedidos" placeholder="Buscar por nº do pedido, nº da nota, tipo, cliente, PV, código ou descrição do item, valor, data, vendedor ou status..." oninput="render()">
         <button type="button" class="filtro-toggle-btn" id="filtro-toggle-pedidos" onclick="toggleFiltro('pedidos')">Filtros <span class="filtro-badge" id="filtro-badge-pedidos">0</span></button>
         <button type="button" class="btn small so-admin-pedidorapido" onclick="abrirPedidoRapido()">+ Pedido rápido</button>
       </div>
@@ -955,7 +955,7 @@
       </div>
 
       <div class="toolbar">
-        <input type="text" id="busca-semnota" placeholder="Buscar por tipo, cliente, PV, código ou descrição do item, valor, data, vendedor ou status..." oninput="render()">
+        <input type="text" id="busca-semnota" placeholder="Buscar por nº do pedido, nº da nota, tipo, cliente, PV, código ou descrição do item, valor, data, vendedor ou status..." oninput="render()">
         <button type="button" class="filtro-toggle-btn" id="filtro-toggle-semnota" onclick="toggleFiltro('semnota')">Filtros <span class="filtro-badge" id="filtro-badge-semnota">0</span></button>
         <button type="button" class="btn small so-admin-pedidorapido" onclick="abrirPedidoRapidoSN()">+ Pedido rápido</button>
       </div>
@@ -1032,7 +1032,7 @@
       </div>
 
       <div class="toolbar">
-        <input type="text" id="busca-saidas" placeholder="Buscar por tipo, cliente, PV, código ou descrição do item, valor, data, vendedor ou status..." oninput="render()">
+        <input type="text" id="busca-saidas" placeholder="Buscar por nº do pedido, nº da nota, tipo, cliente, PV, código ou descrição do item, valor, data, vendedor ou status..." oninput="render()">
         <label style="margin:0;">Filtrar por coleta:</label>
         <select id="filtro-coleta-saidas" onchange="render()">
           <option value="aguardando" selected>Aguardando coleta</option>
@@ -1092,7 +1092,7 @@
       </div>
 
       <div class="toolbar">
-        <input type="text" id="busca-saidas-semnota" placeholder="Buscar por tipo, cliente, PV, código ou descrição do item, valor, data, vendedor ou status..." oninput="render()">
+        <input type="text" id="busca-saidas-semnota" placeholder="Buscar por nº do pedido, nº da nota, tipo, cliente, PV, código ou descrição do item, valor, data, vendedor ou status..." oninput="render()">
         <label style="margin:0;">Filtrar por coleta:</label>
         <select id="filtro-coleta-semnota" onchange="render()">
           <option value="aguardando" selected>Aguardando coleta</option>
@@ -4023,13 +4023,19 @@ function pedidoTextoBusca(p, aba){
   const itensSaidaSemNota = (p.documentosSemNota || []).flatMap(d => d.itens || []);
   const valorPedido = pedidoValorComIPI(p);
   const partes = [
-    p.tipo, p.nomeCliente, p.proposta, p.vendedor, p.dataEntrada,
+    p.id, p.tipo, p.nomeCliente, p.proposta, p.vendedor, p.dataEntrada,
     statusTextoParaAba(p, aba),
     formatBRL(valorPedido), String(valorPedido),
     ...itens.map(it=>it.codigo),
     ...itens.map(it=>it.descricao),
     ...itensSaidaSemNota.map(it=>it.descricao),
-    ...itens.map(it=> it.valorSemIPI ? formatBRL(parseValor(it.valorSemIPI)*fatorIPI(p)) : '')
+    ...itens.map(it=> it.valorSemIPI ? formatBRL(parseValor(it.valorSemIPI)*fatorIPI(p)) : ''),
+    // Versão 2026-10-28 (pedido do usuário): busca passou a achar também pelo
+    // número da nota fiscal e pelo número do documento de saída sem nota —
+    // antes só dava pra buscar por código/descrição do item, cliente, PV,
+    // vendedor, data, status e valor; número de NF/documento não entrava.
+    ...(p.notas || []).map(n => n.numero),
+    ...(p.documentosSemNota || []).map(d => d.numero)
   ];
   return partes.filter(Boolean).join(' ').toLowerCase();
 }
