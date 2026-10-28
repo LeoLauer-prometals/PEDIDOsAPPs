@@ -818,11 +818,6 @@
           <div class="label">Aguardando coleta</div>
           <div class="valor" id="painel-aguardandocoleta">0</div>
         </div>
-        <div class="painel-card">
-          <span class="icon">📄</span>
-          <div class="label">Sem nota — documento pendente</div>
-          <div class="valor" id="painel-semnotapendente">0</div>
-        </div>
       </div>
 
       <div class="panel" id="painel-vendedor-individual" style="display:none;">
@@ -962,6 +957,28 @@
       <div class="toolbar">
         <input type="text" id="busca-semnota" placeholder="Buscar por tipo, cliente, PV, código ou descrição do item, valor, data, vendedor ou status..." oninput="render()">
         <button type="button" class="filtro-toggle-btn" id="filtro-toggle-semnota" onclick="toggleFiltro('semnota')">Filtros <span class="filtro-badge" id="filtro-badge-semnota">0</span></button>
+        <button type="button" class="btn small so-admin-pedidorapido" onclick="abrirPedidoRapidoSN()">+ Pedido rápido</button>
+      </div>
+      <div class="panel" id="painel-pedido-rapido-sn" style="display:none; margin-bottom:14px;">
+        <h2 class="secao">Pedido rápido (sem nota fiscal)</h2>
+        <div class="subhead" style="margin-bottom:10px;">Só o essencial pra lançar rápido — cliente e um item, já marcado como "Sem NF". Dá pra completar vendedor, condição e os outros detalhes depois, editando o pedido normalmente.</div>
+        <div class="grid2">
+          <div class="field field-busca"><label>Nome do cliente</label><input id="prsn-nomecliente" autocomplete="off"><div class="busca-dropdown" id="prsn-nomecliente-dropdown"></div></div>
+          <div class="field field-busca"><label>CNPJ do cliente</label><input id="prsn-cnpj" placeholder="00.000.000/0000-00" oninput="formatarCNPJInput(this)" autocomplete="off"><div class="busca-dropdown" id="prsn-cnpj-dropdown"></div></div>
+        </div>
+        <div class="grid2" style="margin-top:8px;">
+          <div class="field"><label>Tipo</label><select id="prsn-tipo"><option value="discos">Discos</option><option value="fundidos">Fundidos</option></select></div>
+          <div class="field"><label>Data de entrada</label><input type="date" id="prsn-data"></div>
+        </div>
+        <div class="nota-grid" style="margin-top:8px;">
+          <div class="field field-busca"><label>Código do item</label><input id="prsn-item-codigo" autocomplete="off"><div class="busca-dropdown" id="prsn-item-codigo-dropdown"></div></div>
+          <div class="field"><label>Quantidade</label><input id="prsn-item-qtd"></div>
+          <div class="field"><label>Valor sem IPI</label><input id="prsn-item-valor" placeholder="R$" oninput="formatarMoedaInput(this)"></div>
+        </div>
+        <div class="actions-row" style="margin-top:12px;">
+          <button class="btn small" id="btn-lancar-pedido-rapido-sn" onclick="lancarPedidoRapidoSN()">Lançar pedido rápido</button>
+          <button class="btn small secondary" onclick="fecharPedidoRapidoSN()">Fechar</button>
+        </div>
       </div>
       <div class="filtro-panel" id="filtro-panel-semnota">
         <div class="filtro-grid">
@@ -983,6 +1000,7 @@
               <option value="pendente">Documento pendente</option>
               <option value="parcial">Saída parcial</option>
               <option value="total">Saída total</option>
+              <option value="finalizado">Finalizado</option>
             </select>
           </div>
         </div>
@@ -1017,8 +1035,8 @@
         <input type="text" id="busca-saidas" placeholder="Buscar por tipo, cliente, PV, código ou descrição do item, valor, data, vendedor ou status..." oninput="render()">
         <label style="margin:0;">Filtrar por coleta:</label>
         <select id="filtro-coleta-saidas" onchange="render()">
+          <option value="aguardando" selected>Aguardando coleta</option>
           <option value="todos">Todas</option>
-          <option value="aguardando">Aguardando coleta</option>
           <option value="coletada">Já coletado</option>
         </select>
         <button type="button" class="filtro-toggle-btn" id="filtro-toggle-saidas" onclick="toggleFiltro('saidas')">Filtros <span class="filtro-badge" id="filtro-badge-saidas">0</span></button>
@@ -1077,8 +1095,8 @@
         <input type="text" id="busca-saidas-semnota" placeholder="Buscar por tipo, cliente, PV, código ou descrição do item, valor, data, vendedor ou status..." oninput="render()">
         <label style="margin:0;">Filtrar por coleta:</label>
         <select id="filtro-coleta-semnota" onchange="render()">
+          <option value="aguardando" selected>Aguardando coleta</option>
           <option value="todos">Todas</option>
-          <option value="aguardando">Aguardando coleta</option>
           <option value="coletada">Já coletado</option>
         </select>
         <button type="button" class="filtro-toggle-btn" id="filtro-toggle-saidas-semnota" onclick="toggleFiltro('saidas-semnota')">Filtros <span class="filtro-badge" id="filtro-badge-saidas-semnota">0</span></button>
@@ -3665,7 +3683,7 @@ async function lancarPedido(){
 // — a única diferença é que o "item pronto avulso" já marca o item como
 // pronto (pronto:true), pra cair direto na fila de "Itens Prontos".
 // ============================================================================
-async function criarPedidoRapidoComUmItem({ nomeCliente, cnpj, tipo, dataEntrada, codigo, quantidade, valor, pronto, dataPronto }){
+async function criarPedidoRapidoComUmItem({ nomeCliente, cnpj, tipo, dataEntrada, codigo, quantidade, valor, pronto, dataPronto, notaTipo }){
   if(!nomeCliente) return { error: 'Preencha o nome do cliente.' };
   if(!codigo) return { error: 'Preencha o código do item.' };
   if(!quantidade) return { error: 'Preencha a quantidade do item.' };
@@ -3673,6 +3691,7 @@ async function criarPedidoRapidoComUmItem({ nomeCliente, cnpj, tipo, dataEntrada
   const payload = {
     tipo, nome_cliente: nomeCliente, cnpj: cnpj || null,
     data_entrada: dataEntrada || hojeISO(),
+    nota_tipo: notaTipo || 'Com NF',
     criado_por: currentUser.id
   };
   const { data: inserted, error } = await sb.from('pedidos').insert(payload).select().single();
@@ -3716,6 +3735,7 @@ function inicializarBuscaPedidoRapido(prefixo){
 }
 inicializarBuscaPedidoRapido('pr');
 inicializarBuscaPedidoRapido('ip');
+inicializarBuscaPedidoRapido('prsn');
 
 function abrirPedidoRapido(){
   if(!isAdmin()) return; // botão já fica escondido pro vendedor — isso é só reforço
@@ -3745,6 +3765,43 @@ async function lancarPedidoRapido(){
   }
   showToast((resultado.pedidoCompleto ? resultado.pedidoCompleto.id : resultado.numero) + ' lançado com sucesso.' + textoResultadoCadastroAutomatico(resultado.resultadoCadastro));
   fecharPedidoRapido();
+  if(btn){ btn.disabled = false; btn.textContent = 'Lançar pedido rápido'; }
+  render();
+}
+
+// Mesmo atalho de "Pedido rápido" acima, só que pra aba "Pedidos sem nota" —
+// pedido do usuário (2026-10-27): a aba "Pedidos sem nota" não tinha
+// equivalente, porque `criarPedidoRapidoComUmItem` nunca definia `nota_tipo`
+// (sempre caía no default "Com NF" do banco). Reaproveita o mesmo helper,
+// só passando notaTipo:'Sem NF'.
+function abrirPedidoRapidoSN(){
+  if(!isAdmin()) return; // botão já fica escondido pro vendedor — isso é só reforço
+  document.getElementById('painel-pedido-rapido-sn').style.display = '';
+  if(!document.getElementById('prsn-data').value) document.getElementById('prsn-data').value = hojeISO();
+}
+function fecharPedidoRapidoSN(){
+  document.getElementById('painel-pedido-rapido-sn').style.display = 'none';
+  ['prsn-nomecliente','prsn-cnpj','prsn-item-codigo','prsn-item-qtd','prsn-item-valor'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('prsn-tipo').value = 'discos';
+  document.getElementById('prsn-data').value = '';
+}
+async function lancarPedidoRapidoSN(){
+  if(!isAdmin()){ showToast('Só admin pode usar o pedido rápido.'); return; }
+  const btn = document.getElementById('btn-lancar-pedido-rapido-sn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Lançando...'; }
+  const resultado = await criarPedidoRapidoComUmItem({
+    nomeCliente: val('prsn-nomecliente'), cnpj: val('prsn-cnpj'),
+    tipo: document.getElementById('prsn-tipo').value, dataEntrada: val('prsn-data'),
+    codigo: val('prsn-item-codigo'), quantidade: val('prsn-item-qtd'), valor: val('prsn-item-valor'),
+    pronto: false, notaTipo: 'Sem NF'
+  });
+  if(resultado.error){
+    showToast(resultado.error);
+    if(btn){ btn.disabled = false; btn.textContent = 'Lançar pedido rápido'; }
+    return;
+  }
+  showToast((resultado.pedidoCompleto ? resultado.pedidoCompleto.id : resultado.numero) + ' lançado com sucesso.' + textoResultadoCadastroAutomatico(resultado.resultadoCadastro));
+  fecharPedidoRapidoSN();
   if(btn){ btn.disabled = false; btn.textContent = 'Lançar pedido rápido'; }
   render();
 }
@@ -3934,7 +3991,10 @@ const FILTRO_ABAS = ['pedidos','semnota','saidas','saidas-semnota','cancelados',
 
 function statusTextoParaAba(p, aba){
   if(aba==='pedidos') return statusPedido(p).text;
-  if(aba==='semnota') return (p.documentosSemNota && p.documentosSemNota.length) ? 'saída parcial' : 'documento pendente';
+  if(aba==='semnota'){
+    if(p.finalizado) return 'finalizado';
+    return labelDocumentoSemNota(computeSemNotaStatus(p));
+  }
   if(aba==='saidas') return labelNota(computeNotaStatus(p));
   if(aba==='saidas-semnota') return labelDocumentoSemNota(computeSemNotaStatus(p));
   if(aba==='cancelados') return 'cancelado';
@@ -3946,7 +4006,10 @@ function statusValorParaAba(p, aba){
     const ns = computeNotaStatus(p);
     return (ns==='total' || ns==='parcial') ? ns : p.status; // 'novo' | 'producao'
   }
-  if(aba==='semnota') return computeSemNotaStatus(p); // 'pendente' | 'parcial' | 'total'
+  if(aba==='semnota'){
+    if(p.finalizado) return 'finalizado';
+    return computeSemNotaStatus(p); // 'pendente' | 'parcial' | 'total'
+  }
   if(aba==='saidas') return computeNotaStatus(p);
   if(aba==='saidas-semnota') return computeSemNotaStatus(p);
   return '';
@@ -4233,7 +4296,7 @@ function render(){
       <td>${p.proposta||'-'}</td>
       <td>${p.dataEntrada||'-'}</td>
       <td>${p.vendedor||'-'}</td>
-      <td><span class="chip ${computeSemNotaStatus(p)}">${computeSemNotaStatus(p)==='total' ? 'saída total' : (docs.length ? 'saída parcial' : 'documento pendente')}</span></td>
+      <td><span class="chip ${p.finalizado ? 'finalizado' : computeSemNotaStatus(p)}">${p.finalizado ? 'finalizado' : (computeSemNotaStatus(p)==='total' ? 'saída total' : (docs.length ? 'saída parcial' : 'documento pendente'))}</span></td>
       <td>${celulaExcluirRapido(p)}${p.obsInterna ? ' <span class="note-flag">● obs.</span>' : ''}</td>
     `;
     tblSN.appendChild(trHead);
@@ -4387,6 +4450,20 @@ function render(){
       <td>${p.coletaStatus === 'coletada' ? (p.coletaData || '-') : '-'}</td>
     `;
     tblSNS.appendChild(tr);
+
+    // Lista de itens embaixo da linha, igual já existia em "Saídas" (com
+    // nota) — pedido do usuário (2026-10-27): "Saídas sem nota" só mostrava o
+    // resumo da linha, sem o detalhe por item de cada documento emitido.
+    const itensSaidaSN = docs.flatMap(d => d.itens || []);
+    if(itensSaidaSN.length){
+      const trItensSNS = document.createElement('tr');
+      trItensSNS.className = 'nota-strip';
+      const chipsItensSNS = itensSaidaSN.map(it=>
+        `<span class="chip item">${it.codigo||'-'} · qtd ${it.quantidade||'-'} · ${formatBRL(parseValor(it.valor))}</span>`
+      ).join(' ');
+      trItensSNS.innerHTML = `<td colspan="8">${chipsItensSNS}</td>`;
+      tblSNS.appendChild(trItensSNS);
+    }
   });
 
   // "Valor de nota/saída no mês" é o valor efetivamente FATURADO/despachado
@@ -4573,9 +4650,6 @@ async function renderPainel(){
     return (p.notas||[]).some(n => (n.coletaStatus||'aguardando') !== 'coletada');
   });
   document.getElementById('painel-aguardandocoleta').textContent = aguardandoColeta.length;
-
-  const semNotaPendente = pedidos.filter(p=> isSemNota(p) && (p.documentosSemNota||[]).length === 0 && !p.cancelado);
-  document.getElementById('painel-semnotapendente').textContent = semNotaPendente.length;
 
   const semNotaMes = pedidos.filter(p=> isSemNota(p) && (p.dataEntrada||'').slice(0,7)===nowMonth && !p.cancelado);
   const valorSemNotaMes = semNotaMes.reduce((s,p)=>s+pedidoValorComIPI(p),0);
