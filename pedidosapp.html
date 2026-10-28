@@ -1130,7 +1130,7 @@
       <div class="panel" style="padding:0; overflow:hidden;">
         <table>
           <thead><tr>
-            <th>Pedido</th><th>Cliente</th><th>Documentos emitidos</th><th>Data</th><th>Valor da saída</th><th>Status</th><th>Coleta</th><th>Data da coleta</th>
+            <th>Pedido</th><th>Cliente</th><th>Data do documento</th><th>Qtd</th><th>Valor da saída</th><th>Documento</th><th>Coleta</th><th>Data da coleta</th>
           </tr></thead>
           <tbody id="tbl-saidas-semnota"></tbody>
         </table>
@@ -2230,6 +2230,14 @@ function mapPedidoRow(row){
     })),
     documentosSemNota: (row.documentos_sem_nota||[]).map(d=>({
       dbId: d.id, numero: d.numero, data: d.data, pdfPath: d.pdf_url,
+      // coletaStatus/coletaData (migracao_5_0.sql) — antes de 2026-10-29, a
+      // coleta de "Sem NF" só existia no nível do PEDIDO inteiro
+      // (pedidos.coleta_status), então marcar um documento como coletado
+      // marcava TODOS os documentos daquele pedido, mesmo que só um tivesse
+      // sido retirado de fato. `coletaStatus`/`coletaData` ausentes (coluna
+      // nova ainda não migrada, ou documento gerado antes desta versão) caem
+      // no fallback pro campo antigo do pedido em cada ponto que lê isso.
+      coletaStatus: d.coleta_status, coletaData: d.coleta_data,
       itens: (d.documento_itens||[]).map(di=>({
         codigo: di.codigo, descricao: di.descricao, quantidade: di.quantidade,
         valor: di.valor, certificado: di.certificado,
@@ -3943,6 +3951,9 @@ function somaNotas(p){
 function valorDocumentoSemNota(d){
   return (d.itens||[]).reduce((s,it)=>s+parseValor(it.valor),0);
 }
+function qtdDocumentoSemNota(d){
+  return (d.itens||[]).reduce((s,it)=>s+(parseFloat(String(it.quantidade||'').replace(',','.'))||0),0);
+}
 function somaDocumentosSemNota(p){
   return (p.documentosSemNota||[]).reduce((s,d)=>s+valorDocumentoSemNota(d),0);
 }
@@ -4418,18 +4429,23 @@ function render(){
   });
   document.getElementById('empty-saidas').style.display = linhasSaidas ? 'none' : 'block';
 
+  // Versão 2026-10-29 (correção pedida pelo usuário): até aqui, a coleta de
+  // "Sem NF" só existia no nível do PEDIDO inteiro (p.coletaStatus) — então,
+  // num pedido com 2+ documentos emitidos, marcar "coletado" num documento
+  // marcava TODOS juntos, mesmo que só um tivesse sido retirado de fato.
+  // Corrigido pra funcionar documento a documento, igual "Saídas" (com nota)
+  // já funciona nota a nota desde 2026-09-22: uma linha por DOCUMENTO (não
+  // mais por pedido), cada um com seu próprio botão marcar/desfazer coleta.
+  // `d.coletaStatus`/`d.coletaData` vêm de `documentos_sem_nota.coleta_status`
+  // (migracao_5_0.sql); um documento sem valor próprio ainda (coluna não
+  // migrada no banco, ou documento gerado antes desta correção) cai no
+  // fallback do campo antigo do pedido (`p.coletaStatus`/`p.coletaData`),
+  // pra não fazer documentos já coletados "voltarem" a aguardando sozinhos.
   const semNotaProntos = pedidosSemNota.filter(p=>(p.documentosSemNota||[]).length>0 && !p.cancelado);
   const filtroColetaSN = document.getElementById('filtro-coleta-semnota')?.value || 'todos';
-  // Versão 4.10 (pedido do usuário): filtro novo "Mês do documento" —
-  // separado do "Mês de entrada" — filtra pela data dos documentos de saída.
-  // Essa lista é uma linha por PEDIDO (não por documento, diferente de
-  // Saídas/Notas), então o pedido entra se TIVER algum documento no mês
-  // escolhido, não precisa ser o único.
   const filtroMesDocSN = document.getElementById('filtro-mesnota-saidas-semnota')?.value || '';
   const buscaSaidasSN = (document.getElementById('busca-saidas-semnota')?.value || '').toLowerCase().trim();
-  const semNotaFiltradosColeta = semNotaProntos.filter(p=>{
-    if(filtroColetaSN!=='todos' && (p.coletaStatus||'aguardando') !== filtroColetaSN) return false;
-    if(filtroMesDocSN && !(p.documentosSemNota||[]).some(d=> (d.data||'').slice(0,7) === filtroMesDocSN)) return false;
+  const pedidosSaidasSNFiltrados = semNotaProntos.filter(p=>{
     if(!pedidoPassaBusca(p, buscaSaidasSN, 'saidas-semnota')) return false;
     if(!pedidoPassaFiltros(p, 'saidas-semnota')) return false;
     return true;
@@ -4437,40 +4453,44 @@ function render(){
   document.getElementById('count-saidas-semnota').textContent = semNotaProntos.length;
   const tblSNS = document.getElementById('tbl-saidas-semnota');
   tblSNS.innerHTML = '';
-  document.getElementById('empty-saidas-semnota').style.display = semNotaFiltradosColeta.length ? 'none' : 'block';
-  semNotaFiltradosColeta.forEach(p=>{
-    const docs = p.documentosSemNota || [];
-    const valorSaida = somaDocumentosSemNota(p);
+  let linhasSaidasSN = 0;
+  pedidosSaidasSNFiltrados.forEach(p=>{
     const nsn = computeSemNotaStatus(p);
-    const tr = document.createElement('tr');
-    tr.className = 'rowlink';
-    tr.onclick = ()=>openDetail(p.id);
-    tr.innerHTML = `
-      <td class="pedido-id">${p.id}</td>
-      <td>${p.nomeCliente || '-'}</td>
-      <td>${docs.map(d=>'nº '+d.numero).join(', ')}</td>
-      <td>${p.dataEntrada || '-'}</td>
-      <td>${valorSaida ? formatBRL(valorSaida) : '-'}</td>
-      <td><span class="chip ${nsn}">${labelDocumentoSemNota(nsn)}</span></td>
-      <td>${p.coletaStatus === 'coletada' ? '<span class="chip total">coletado</span>' : '<span class="chip pendente">aguardando coleta</span>'}</td>
-      <td>${p.coletaStatus === 'coletada' ? (p.coletaData || '-') : '-'}</td>
-    `;
-    tblSNS.appendChild(tr);
+    (p.documentosSemNota||[]).forEach((d, idx)=>{
+      const docColetaStatus = d.coletaStatus || p.coletaStatus || 'aguardando';
+      const docColetaData = d.coletaStatus ? d.coletaData : (p.coletaStatus==='coletada' ? p.coletaData : null);
+      if(filtroColetaSN!=='todos' && docColetaStatus !== filtroColetaSN) return;
+      if(filtroMesDocSN && (d.data||'').slice(0,7) !== filtroMesDocSN) return;
+      linhasSaidasSN++;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="pedido-id">${p.id}</td>
+        <td>${p.nomeCliente || '-'}</td>
+        <td>${d.data || '-'}</td>
+        <td>${qtdDocumentoSemNota(d) || '-'}</td>
+        <td>${formatBRL(valorDocumentoSemNota(d))}</td>
+        <td>nº ${d.numero||'-'} <span class="chip ${nsn}">${labelDocumentoSemNota(nsn)}</span></td>
+        <td>${docColetaStatus === 'coletada' ? '<span class="chip total">coletado</span>' : '<span class="chip pendente">aguardando coleta</span>'}</td>
+        <td>${docColetaStatus === 'coletada'
+          ? `${formatarDataBR(docColetaData)} <span class="x" onclick="event.stopPropagation(); desfazerColetaDocumentoSemNota('${p.id}', ${idx})">desfazer</span>`
+          : `<input type="date" id="coleta-data-sn-${p.id}-${idx}" style="width:132px;" onclick="event.stopPropagation()"> <button type="button" class="btn small secondary" onclick="event.stopPropagation(); marcarDocumentoSemNotaColetado('${p.id}', ${idx})">Marcar coletado</button>`}</td>
+      `;
+      tr.className = 'rowlink';
+      tr.onclick = ()=>openDetail(p.id);
+      tblSNS.appendChild(tr);
 
-    // Lista de itens embaixo da linha, igual já existia em "Saídas" (com
-    // nota) — pedido do usuário (2026-10-27): "Saídas sem nota" só mostrava o
-    // resumo da linha, sem o detalhe por item de cada documento emitido.
-    const itensSaidaSN = docs.flatMap(d => d.itens || []);
-    if(itensSaidaSN.length){
-      const trItensSNS = document.createElement('tr');
-      trItensSNS.className = 'nota-strip';
-      const chipsItensSNS = itensSaidaSN.map(it=>
-        `<span class="chip item">${it.codigo||'-'} · qtd ${it.quantidade||'-'} · ${formatBRL(parseValor(it.valor))}</span>`
-      ).join(' ');
-      trItensSNS.innerHTML = `<td colspan="8">${chipsItensSNS}</td>`;
-      tblSNS.appendChild(trItensSNS);
-    }
+      if(d.itens && d.itens.length){
+        const trItensSNS = document.createElement('tr');
+        trItensSNS.className = 'nota-strip';
+        const chipsItensSNS = d.itens.map(it=>
+          `<span class="chip item">${it.codigo||'-'} · qtd ${it.quantidade||'-'} · ${formatBRL(parseValor(it.valor))}</span>`
+        ).join(' ');
+        trItensSNS.innerHTML = `<td colspan="8">${chipsItensSNS}</td>`;
+        tblSNS.appendChild(trItensSNS);
+      }
+    });
   });
+  document.getElementById('empty-saidas-semnota').style.display = linhasSaidasSN ? 'none' : 'block';
 
   // "Valor de nota/saída no mês" é o valor efetivamente FATURADO/despachado
   // naquele mês — soma pelas notas/documentos cuja própria data cai no mês
@@ -4644,13 +4664,16 @@ async function renderPainel(){
   // mudança) pros pedidos com nota, que nunca é preenchido nesse fluxo — na
   // prática o card nunca descontava um pedido com nota mesmo depois de TODAS
   // as notas coletadas. Corrigido: pedido com nota conta aqui se tiver pelo
-  // menos uma nota ainda não coletada; pedido sem nota continua usando o
-  // campo do próprio pedido (esse não mudou de lugar).
+  // menos uma nota ainda não coletada. Desde 2026-10-29 (migracao_5_0.sql),
+  // pedido SEM nota segue o mesmo padrão — conta se tiver pelo menos um
+  // DOCUMENTO ainda não coletado (cada documento com seu próprio
+  // d.coletaStatus, com fallback pro campo antigo do pedido quando o
+  // documento ainda não tem o campo novo preenchido).
   const aguardandoColeta = pedidos.filter(p=>{
     if(p.cancelado) return false;
     if(isSemNota(p)){
-      if((p.coletaStatus||'aguardando') === 'coletada') return false;
-      return (p.documentosSemNota||[]).length > 0;
+      if(!(p.documentosSemNota||[]).length) return false;
+      return (p.documentosSemNota||[]).some(d => (d.coletaStatus || p.coletaStatus || 'aguardando') !== 'coletada');
     }
     if(computeNotaStatus(p) === 'pendente') return false;
     return (p.notas||[]).some(n => (n.coletaStatus||'aguardando') !== 'coletada');
@@ -5894,6 +5917,45 @@ async function desfazerColetaNota(id, idx){
   await refetchPedido(p.dbId);
   render();
 }
+
+// Coleta por DOCUMENTO de saída sem nota fiscal (migracao_5_0.sql) — mesmo
+// padrão de marcarNotaColetada/desfazerColetaNota acima, pra "Sem NF" parar
+// de depender só do campo antigo no nível do pedido inteiro (pedidos.
+// coleta_status), que marcava TODOS os documentos de um pedido como
+// coletados de uma vez só — usuário reportou (2026-10-28) que, com 2
+// documentos no mesmo pedido, marcar a coleta de um marcava o outro junto.
+// Se a coluna nova ainda não existir no banco (migração não rodada), o
+// update falha e avisamos por toast — sem quebrar a tela.
+async function marcarDocumentoSemNotaColetado(id, idx){
+  const p = pedidos.find(x=>x.id===id);
+  const doc = p.documentosSemNota[idx];
+  const dataInput = document.getElementById(`coleta-data-sn-${id}-${idx}`);
+  const dataColeta = (dataInput && dataInput.value) || new Date().toISOString().slice(0,10);
+  const { error } = await sb.from('documentos_sem_nota').update({ coleta_status: 'coletada', coleta_data: dataColeta }).eq('id', doc.dbId);
+  if(error){
+    if(/coleta_status|coleta_data|column/i.test(error.message||'')){
+      showToast('Não consegui marcar a coleta deste documento — rode a migracao_5_0.sql no Supabase (adiciona coleta por documento em "Sem NF").', 5000);
+      return;
+    }
+    mostrarErroSupabase('Erro ao marcar coleta', error); return;
+  }
+  await refetchPedido(p.dbId);
+  render();
+}
+async function desfazerColetaDocumentoSemNota(id, idx){
+  const p = pedidos.find(x=>x.id===id);
+  const doc = p.documentosSemNota[idx];
+  const { error } = await sb.from('documentos_sem_nota').update({ coleta_status: 'aguardando', coleta_data: null }).eq('id', doc.dbId);
+  if(error){
+    if(/coleta_status|coleta_data|column/i.test(error.message||'')){
+      showToast('Não consegui desfazer a coleta deste documento — rode a migracao_5_0.sql no Supabase (adiciona coleta por documento em "Sem NF").', 5000);
+      return;
+    }
+    mostrarErroSupabase('Erro ao desfazer coleta', error); return;
+  }
+  await refetchPedido(p.dbId);
+  render();
+}
 async function removerNota(id, idx){
   const p = pedidos.find(x=>x.id===id);
   const nota = p.notas[idx];
@@ -6906,8 +6968,16 @@ function situacaoItem(p, it){
   if(p.cancelado) return 'Cancelado';
   const pacote = pacoteQueCobreItem(p, it);
   if(!pacote) return it.pronto ? 'Pronto/aguardando faturamento' : 'Em produção';
-  const coletado = isSemNota(p) ? (p.coletaStatus==='coletada') : (pacote.coletaStatus==='coletada');
-  return coletado ? 'Coletado' : 'Aguardando coleta';
+  // Versão 2026-10-29 (correção): pra "Sem NF", a coleta antes sempre olhava
+  // só p.coletaStatus (o pedido inteiro), ignorando QUAL documento (`pacote`)
+  // cobriu este item — por isso um item coberto pelo documento ainda não
+  // coletado aparecia "Coletado" se QUALQUER outro documento do mesmo pedido
+  // já tivesse sido marcado. Agora usa o status do próprio documento
+  // (`pacote.coletaStatus`) primeiro, com fallback pro campo antigo do
+  // pedido só quando esse documento específico ainda não tem o campo novo
+  // preenchido (documento gerado antes da migracao_5_0.sql).
+  const coletaStatusEfetivo = pacote.coletaStatus || (isSemNota(p) ? p.coletaStatus : null);
+  return coletaStatusEfetivo === 'coletada' ? 'Coletado' : 'Aguardando coleta';
 }
 // "ainda não faturado/despachado" cobre as duas situações que antecedem a
 // saída — item em produção normal, e item pronto mas ainda esperando entrar
@@ -6935,7 +7005,10 @@ function saidaDoItem(p, it){
   const pacote = pacoteQueCobreItem(p, it);
   if(!pacote) return null;
   if(isSemNota(p)){
-    return { numero: pacote.numero, data: pacote.data, coletaStatus: p.coletaStatus, coletaData: p.coletaData };
+    // Mesma correção de situacaoItem acima: usa o status do documento que
+    // cobriu ESTE item, com fallback pro campo antigo do pedido só quando
+    // esse documento específico ainda não tem o campo novo preenchido.
+    return { numero: pacote.numero, data: pacote.data, coletaStatus: pacote.coletaStatus || p.coletaStatus, coletaData: pacote.coletaStatus ? pacote.coletaData : p.coletaData };
   }
   return { numero: pacote.numero, data: pacote.data, coletaStatus: pacote.coletaStatus, coletaData: pacote.coletaData };
 }
