@@ -5387,7 +5387,7 @@ function openDetail(id){
 
         <div class="panel" style="margin-bottom:14px;">
           <h2 class="secao">Resumo em layout planilha (pra colar no e-mail)</h2>
-          <div class="subhead" style="margin-bottom:12px;">Copia uma linha por item, nas mesmas colunas da planilha que você usava antes (cliente, status, nº pedido, código, descrição, liga, quantidade, valores com/sem IPI, RCA, PV etc.). Colunas sem informação no app (UF, País, Lâmina, Empresa, Aplicação, OP PAI, Status pedido, Projetos) ficam em branco — complete à mão antes de mandar, se precisar. Depois de clicar, é só colar (Ctrl+V) direto no corpo do e-mail.</div>
+          <div class="subhead" style="margin-bottom:12px;">Copia uma linha por item, com cliente, status, nº pedido, data, código, descrição, liga, diâmetro, quantidade/peso, valores com/sem IPI, PV e prazo de entrega. Depois de clicar, é só colar (Ctrl+V) direto no corpo do e-mail.</div>
           <div class="actions-row" style="margin-top:0;">
             <button class="btn small secondary" onclick="copiarResumoPlanilha('${p.id}')">Copiar layout planilha</button>
           </div>
@@ -6990,60 +6990,47 @@ function enviarResumoPorEmail(id){
 // direto no corpo; como copia em HTML (via Clipboard API), cola como uma
 // tabela de verdade, com linhas e colunas, não como texto corrido.
 //
-// Mapeamento de colunas (pedido do usuário: "usar o que já existe e as
-// informações que não temos, não criar campo" — por isso várias colunas
-// ficam em branco de propósito, sem inventar dado nem criar campo novo):
-// CLIENTE/Nº PEDIDO/DATA/RCA/Nº Pedido Venda vêm do pedido; STATUS vem de
-// `situacaoItem` (mesma lógica já usada no resto do app); COD/DESCRIÇÃO DO
-// ITEM/LIGA/QTY PC/PRAZO DE ENTREGA vêm de cada item; DIAM usa a polegada do
-// disco quando o item é de discos; QTY/PESO UNITÁRIO e UND refletem se o item
-// foi precificado por peça ou por kg; VALOR DO PEDIDO S/IPI, C/IPI, "%" e
-// "VALOR" vêm de `fatorIPI` (mesma regra de +3,25% já usada no faturamento).
-// UF, PAÍS, LÂMINA, EMPRESA, APLICAÇÃO, OP PAI, STATUS PEDIDO e PROJETOS não
-// existem nos dados do app hoje — ficam em branco pra completar à mão.
+// Mapeamento de colunas: CLIENTE/Nº PEDIDO/DATA/Nº Pedido Venda vêm do
+// pedido; STATUS vem de `situacaoItem` (mesma lógica já usada no resto do
+// app); COD/DESCRIÇÃO DO ITEM/LIGA/QTY PC/PRAZO DE ENTREGA vêm de cada item;
+// DIAM usa a polegada do disco quando o item é de discos; QTY/PESO UNITÁRIO
+// e UND refletem se o item foi precificado por peça ou por kg; VALOR DO
+// PEDIDO S/IPI e C/IPI vêm de `fatorIPI` (mesma regra de +3,25% já usada no
+// faturamento).
+// Versão 2026-11-04 (pedido do usuário): removidas as colunas UF, PAÍS,
+// LÂMINA, "%", VALOR, RCA, EMPRESA, APLICAÇÃO, OP PAI, STATUS PEDIDO e
+// PROJETOS — não existiam nos dados do app (ficavam em branco) e o usuário
+// pediu pra tirar da planilha, em vez de deixar em branco.
 const COLUNAS_RESUMO_PLANILHA = [
-  'CLIENTE','STATUS','UF','PAÍS','Nº PEDIDO','DATA','COD','DESCRIÇÃO DO ITEM','LIGA','LÂMINA','DIAM',
-  'QTY/PESO UNITÁRIO','UND','QTY PC','VALOR DO PEDIDO S/IPI','VALOR DO PEDIDO C/IPI','%','VALOR',
-  'RCA','EMPRESA','APLICAÇÃO','Nº Pedido Venda','OP PAI','STATUS PEDIDO','PRAZO DE ENTREGA','PROJETOS'
+  'CLIENTE','STATUS','Nº PEDIDO','DATA','COD','DESCRIÇÃO DO ITEM','LIGA','DIAM',
+  'QTY/PESO UNITÁRIO','UND','QTY PC','VALOR DO PEDIDO S/IPI','VALOR DO PEDIDO C/IPI',
+  'Nº Pedido Venda','PRAZO DE ENTREGA'
 ];
 function linhasResumoPlanilha(id){
   const p = pedidos.find(x=>x.id===id);
   if(!p) return [];
   const fator = fatorIPI(p);
-  const percentIPI = fator > 1 ? '3,25%' : '0%';
   if(!p.itens || !p.itens.length) return [];
   return p.itens.map(it=>{
     const valorSemIPI = parseValor(it.valorSemIPI);
     const valorComIPI = valorSemIPI * fator;
-    const valorIPI = valorComIPI - valorSemIPI;
     const precificadoPorKg = !!(it.peso && it.valorKgUnit);
     return {
       'CLIENTE': p.nomeCliente || '',
       'STATUS': situacaoItem(p, it) || '',
-      'UF': '',
-      'PAÍS': '',
       'Nº PEDIDO': p.id || '',
       'DATA': formatarDataBR(p.dataEntrada),
       'COD': it.codigo || '',
       'DESCRIÇÃO DO ITEM': it.descricao || '',
       'LIGA': it.liga || '',
-      'LÂMINA': '',
       'DIAM': it.discoPolegada || '',
       'QTY/PESO UNITÁRIO': it.peso || '',
       'UND': precificadoPorKg ? 'KG' : 'PC',
       'QTY PC': it.quantidade || '',
       'VALOR DO PEDIDO S/IPI': formatBRL(valorSemIPI),
       'VALOR DO PEDIDO C/IPI': formatBRL(valorComIPI),
-      '%': percentIPI,
-      'VALOR': formatBRL(valorIPI),
-      'RCA': p.representante || p.representanteResponsavel || '',
-      'EMPRESA': '',
-      'APLICAÇÃO': '',
       'Nº Pedido Venda': p.proposta || '',
-      'OP PAI': '',
-      'STATUS PEDIDO': '',
-      'PRAZO DE ENTREGA': formatarDataBR(it.dataEntrega),
-      'PROJETOS': ''
+      'PRAZO DE ENTREGA': formatarDataBR(it.dataEntrega)
     };
   });
 }
