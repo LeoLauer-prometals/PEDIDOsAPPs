@@ -2986,12 +2986,38 @@ inicializarBuscasFormulario();
 
 function val(id){ const el = document.getElementById(id); return el ? el.value.trim() : ''; }
 
+// Ids (it.dbId) dos itens que já estão na lista de itens AINDA NÃO salva de
+// uma nota/documento sendo montada (`notaItensAtual`/`itensDocSemNotaAtual`)
+// — usado por `opcoesCodigoItensPedido` pra impedir selecionar a MESMA
+// entrega duas vezes dentro da mesma nota/documento (ver correção de
+// 2026-11-04 logo abaixo).
+function idsItensStaged(lista){
+  return (lista||[]).filter(x=>x.itemId).map(x=>String(x.itemId));
+}
+// Reconstrói as opções de um select de código (`d-nota-item-codigo` ou
+// `d-sn-codigo`) depois de adicionar/remover um item da lista ainda não
+// salva — pra refletir na hora qual entrega já foi usada nesta nota/
+// documento (ver `idsItensStaged` acima).
+function atualizarSelectCodigoItem(selectId, p, idsExcluidos){
+  const sel = document.getElementById(selectId);
+  if(!sel || !p) return;
+  sel.innerHTML = opcoesCodigoItensPedido(p, idsExcluidos);
+}
 // Lista de códigos pra escolher (em vez de digitar) ao lançar nota/documento —
 // evita o item ficar "perdido" (preso em produção pra sempre) por causa de um
 // código digitado com espaço/letra diferente do cadastro. Sempre inclui a
 // opção "Outro" como válvula de escape pra casos fora do cadastro do pedido.
-function opcoesCodigoItensPedido(p){
-  const itens = (p.itens || []).filter(it => it.codigo);
+// `idsExcluidos` (Versão 2026-11-04): ids de itens já adicionados à lista
+// AINDA NÃO salva da nota/documento em montagem — ver causa raiz no comentário
+// da correção logo abaixo de `quantidadeFaturadaItem`. Sem isso, nada impedia
+// escolher a MESMA entrega duas vezes na mesma nota (ex.: uma vez com a
+// quantidade cheia, outra com uma quantidade menor "pra corrigir") — a
+// segunda escolha ficava ligada ao MESMO item da primeira, e a entrega que
+// devia ter sido coberta pela segunda linha ficava sem nenhuma ligação,
+// continuando "Em produção" mesmo depois de faturada.
+function opcoesCodigoItensPedido(p, idsExcluidos){
+  const excluidos = idsExcluidos || [];
+  const itens = (p.itens || []).filter(it => it.codigo && !excluidos.includes(String(it.dbId)));
   const escAttr = (s) => String(s==null?'':s).replace(/"/g, '&quot;');
   // Versão 4.16 (pedido do usuário: "porque itens já faturados e coletados
   // aparecem pra faturar de novo?") — item cuja quantidade já foi faturada
@@ -4345,9 +4371,18 @@ function render(){
     if(docs.length){
       const trDoc = document.createElement('tr');
       trDoc.className = 'nota-strip';
-      const chips = docs.map(d=>
-        `<span class="chip total">Doc. nº ${d.numero} · ${d.descricao||'-'} · qtd ${d.quantidade||'-'}</span>`
-      ).join(' ');
+      // Correção 2026-11-04: esse chip usava `d.descricao`/`d.quantidade`
+      // direto no documento — campos de um formato antigo (um item só por
+      // documento) que `mapPedidoRow` não preenche mais desde que
+      // `documentos_sem_nota` ganhou a lista `itens` (vários itens por
+      // documento). Por isso sempre aparecia "- · qtd -", mesmo documento
+      // tendo item(ns) normalmente. Agora soma a quantidade de
+      // `d.itens` (mesma função `qtdDocumentoSemNota` já usada em "Saídas sem
+      // nota") e lista os códigos dos itens do documento.
+      const chips = docs.map(d=>{
+        const resumoCodigos = (d.itens||[]).map(it=>it.codigo||'-').join(', ') || '-';
+        return `<span class="chip total">Doc. nº ${d.numero} · ${resumoCodigos} · qtd ${qtdDocumentoSemNota(d) || '-'}</span>`;
+      }).join(' ');
       trDoc.innerHTML = `<td colspan="7">${chips}</td>`;
       tblSN.appendChild(trDoc);
     }
@@ -4923,7 +4958,7 @@ function openDetail(id){
       <span class="chip ${n.coletaStatus==='coletada'?'total':'pendente'}">${n.coletaStatus==='coletada' ? ('coletado '+formatarDataBR(n.coletaData)) : 'aguardando coleta'}</span>
       ${(()=>{ const qtd = (n.midias?.length||0) + (n.fotoPath?1:0); return qtd ? `<button type="button" class="btn small secondary" onclick="abrirFotoNota('${p.id}', ${i})">Ver ${qtd>1?qtd+' arquivos':'arquivo'}</button>` : ''; })()}
       ${isAdmin() ? `<span class="x" style="color:var(--accent);" onclick="editarNota('${p.id}', ${i})">editar</span>` : ''}
-      <span class="x" onclick="removerNota('${p.id}', ${i})">remover</span>
+      ${isAdmin() ? `<span class="x" onclick="removerNota('${p.id}', ${i})">remover</span>` : ''}
       ${(n.itens&&n.itens.length) ? `<div style="width:100%; margin:4px 0 0; display:flex; flex-wrap:wrap; gap:6px;">${n.itens.map((it,ii)=>{ const qtdIt = (it.midias?.length||0) + (it.fotoPath?1:0); return `<span class="chip item">${it.codigo||'-'} · qtd ${it.quantidade||'-'} · ${formatBRL(parseValor(it.valor))}${qtdIt ? ` · <span class="x" style="color:var(--accent);" onclick="abrirMidiasItemNota('${p.id}', ${i}, ${ii})">ver ${qtdIt>1?qtdIt+' arquivos':'arquivo'}</span>` : ''}</span>`; }).join('')}</div>` : ''}
     </div>
   `).join('') || '<div class="detail-sub" style="margin:0;">Nenhuma nota registrada ainda.</div>';
@@ -4951,7 +4986,7 @@ function openDetail(id){
       </div>
       <div class="nota-grid">
         <div class="field"><label>Código do item</label>
-          <select id="d-sn-codigo" onchange="onCodigoSelecionadoChange('d-sn-codigo')">${opcoesCodigoItensPedido(p)}</select>
+          <select id="d-sn-codigo" onchange="onCodigoSelecionadoChange('d-sn-codigo')">${opcoesCodigoItensPedido(p, idsItensStaged(itensDocSemNotaPedidoId===p.id ? itensDocSemNotaAtual : []))}</select>
           <input id="d-sn-codigo-outro" placeholder="Digite o código" style="display:none; margin-top:6px;">
         </div>
         <div class="field"><label>Descrição</label><input id="d-sn-descricao"></div>
@@ -4980,7 +5015,7 @@ function openDetail(id){
       </div>
       <div class="nota-grid">
         <div class="field"><label>Código do item</label>
-          <select id="d-nota-item-codigo" onchange="onCodigoSelecionadoChange('d-nota-item-codigo')">${opcoesCodigoItensPedido(p)}</select>
+          <select id="d-nota-item-codigo" onchange="onCodigoSelecionadoChange('d-nota-item-codigo')">${opcoesCodigoItensPedido(p, idsItensStaged(notaItensPedidoId===p.id ? notaItensAtual : []))}</select>
           <input id="d-nota-item-codigo-outro" placeholder="Digite o código" style="display:none; margin-top:6px;">
         </div>
         <div class="field"><label>Quantidade</label><input id="d-nota-item-qtd"></div>
@@ -5724,10 +5759,17 @@ function adicionarItemNota(){
   document.getElementById('d-nota-item-valor').value='';
   if(fotoInput) fotoInput.value='';
   renderItensNota();
+  // Correção 2026-11-04: tira do select a entrega que acabou de ser
+  // adicionada, pra não dar pra escolher a mesma de novo por engano dentro
+  // desta mesma nota — ver comentário em `opcoesCodigoItensPedido`.
+  atualizarSelectCodigoItem('d-nota-item-codigo', pedidos.find(x=>x.id===notaItensPedidoId), idsItensStaged(notaItensAtual));
 }
 function removerItemNota(idx){
   notaItensAtual.splice(idx,1);
   renderItensNota();
+  // Devolve a entrega removida pro select, já que ela deixou de estar usada
+  // nesta nota.
+  atualizarSelectCodigoItem('d-nota-item-codigo', pedidos.find(x=>x.id===notaItensPedidoId), idsItensStaged(notaItensAtual));
 }
 
 // Classifica um arquivo (pelo nome) como 'foto', 'video' ou 'arquivo' — usado
@@ -5807,6 +5849,35 @@ async function inserirItensNotaComFallback(itensResolvidos, notaId){
   }
   return { error };
 }
+// Versão 2026-11-04 (pedido do usuário): quando o valor informado ao faturar
+// (nota ou documento sem nota) é diferente do valor já cadastrado no item do
+// pedido, atualiza esse valor sozinho — assim o valor TOTAL do pedido (usado
+// no status de faturado parcial/total, nos relatórios etc.) já reflete o que
+// realmente foi faturado, sem precisar abrir o item e corrigir na mão depois.
+// Só mexe em item com ligação direta (`item_id` — ver migracao_4_5.sql);
+// "Outro / não está na lista" não tem item do pedido pra sincronizar.
+// O valor informado no faturamento por NOTA já vem COM IPI quando se aplica
+// (`data-valorcomipi`, ver `opcoesCodigoItensPedido`/`onCodigoSelecionadoChange`)
+// — por isso divide por `fatorIPI(p)` antes de gravar, já que
+// `itens.valor_sem_ipi` é sempre a base SEM IPI. No documento sem nota o IPI
+// nunca se aplica (`fatorIPI` sempre devolve 1 pra "Sem NF"), então a conta
+// não muda em nada ali — mesmo código serve pros dois.
+async function sincronizarValorItensPedido(p, itensPayload){
+  const fator = fatorIPI(p);
+  for(const it of (itensPayload||[])){
+    if(!it.item_id) continue;
+    const itemPedido = (p.itens||[]).find(x=>x.dbId===it.item_id);
+    if(!itemPedido) continue;
+    const valorInformado = parseValor(it.valor);
+    if(!valorInformado) continue;
+    const novoValorSemIPI = valorInformado / fator;
+    const valorAtual = parseValor(itemPedido.valorSemIPI);
+    if(Math.abs(novoValorSemIPI - valorAtual) < 0.005) continue; // já bate, não grava à toa
+    const { error } = await sb.from('itens').update({ valor_sem_ipi: novoValorSemIPI }).eq('id', it.item_id);
+    if(error){ console.error('Não consegui sincronizar o valor do item com o faturamento.', error); continue; }
+    itemPedido.valorSemIPI = novoValorSemIPI; // já reflete em memória, pro refetchPedido logo depois não "piscar" com o valor antigo
+  }
+}
 async function gerarNota(id){
   const p = pedidos.find(x=>x.id===id);
   const numero = val('d-notaNumero');
@@ -5821,6 +5892,7 @@ async function gerarNota(id){
   const fotoInput = document.getElementById('d-notaFoto');
   const novosArquivosNota = fotoInput && fotoInput.files ? Array.from(fotoInput.files) : [];
   const itensResolvidos = await uploadFotosItensNota(itensNota, p.dbId, p.tipo);
+  await sincronizarValorItensPedido(p, itensResolvidos);
 
   const editando = (notaEditandoPedidoId === id && notaEditandoIdx != null) ? (p.notas||[])[notaEditandoIdx] : null;
 
@@ -6059,10 +6131,15 @@ async function adicionarItemDocSemNota(){
   document.getElementById('d-sn-certificado').value='';
   if(fotoInput) fotoInput.value='';
   renderItensDocSemNota();
+  // Correção 2026-11-04 (mesmo padrão de `adicionarItemNota`): tira do select
+  // a entrega recém-adicionada, pra não dar pra repetir a mesma dentro do
+  // mesmo documento.
+  atualizarSelectCodigoItem('d-sn-codigo', pedidos.find(x=>x.id===itensDocSemNotaPedidoId), idsItensStaged(itensDocSemNotaAtual));
 }
 function removerItemDocSemNota(idx){
   itensDocSemNotaAtual.splice(idx,1);
   renderItensDocSemNota();
+  atualizarSelectCodigoItem('d-sn-codigo', pedidos.find(x=>x.id===itensDocSemNotaPedidoId), idsItensStaged(itensDocSemNotaAtual));
 }
 
 // Mesmo padrão de `inserirItensNotaComFallback` — grava os itens do
@@ -6317,6 +6394,7 @@ async function gerarDocumentoSemNota(id){
   }
   const { error: itensErr } = await inserirItensDocSemNotaComFallback(itensPayload);
   if(itensErr){ mostrarErroSupabase('Documento gerado, mas houve erro ao salvar os itens', itensErr); }
+  await sincronizarValorItensPedido(p, itensPayload);
 
   itensDocSemNotaAtual = [];
   const dataField = document.getElementById('d-sn-data'); if(dataField) dataField.value = hojeISO();
