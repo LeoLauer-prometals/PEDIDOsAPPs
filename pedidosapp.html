@@ -2138,6 +2138,11 @@ let itemPedidoEditandoIdx = null;
 let itemPedidoEditandoPedidoId = null;
 let notaEditandoIdx = null;
 let notaEditandoPedidoId = null;
+// Histórico do pedido (Atualização 2026-11-04) — ver bloco de funções
+// `registrarHistorico`/`abrirHistoricoPedido` mais abaixo.
+let historicoPedidoAberto = false;
+let historicoPedidoCache = [];
+let historicoPedidoSemTabela = false;
 
 // ---- mapeia uma linha do Supabase (snake_case + relações) pro formato usado no app ----
 function mapPedidoRow(row){
@@ -2357,20 +2362,121 @@ function galeriaVendedoresDisponiveis(){
   else if(currentProfile && currentProfile.vendedor_nome){ set.add(currentProfile.vendedor_nome); }
   return Array.from(set).sort();
 }
+// Regra da galeria (Atualização 2026-11-04, pedido do usuário): "quando entrar
+// um pedido do Antonio e a Ranielly for responsável pelo pedido, aparece a
+// galeria do Antonio para a Ranielly" — ou seja, a pasta de um cliente deixa
+// de ficar só dentro da vendedora que a criou; passa a aparecer também pra
+// quem estiver respondendo hoje pelos pedidos daquele cliente, mesmo que os
+// arquivos já existentes tenham sido guardados por outra vendedora antes.
+// `clientesSobMinhaResponsabilidade` lê isso direto de `pedidos` (já
+// carregado) — não depende de nenhuma coluna nova no banco.
+function clientesSobMinhaResponsabilidade(){
+  const set = new Set();
+  if(!currentProfile || !currentProfile.vendedor_nome) return set;
+  (pedidos||[]).forEach(p=>{
+    if(p.vendedor === currentProfile.vendedor_nome && p.nomeCliente){ set.add(p.nomeCliente); }
+  });
+  return set;
+}
+// true quando, pra quem está olhando agora (não-admin), o cliente deve
+// mostrar os arquivos de TODAS as vendedoras juntos (compartilhado) em vez
+// de só os da própria pasta — admin continua vendo vendedor por vendedor,
+// sem esse "merge", pra conseguir organizar/auditar a galeria inteira.
+function galeriaClienteCompartilhado(vendedor, cliente){
+  if(isAdmin() || !currentProfile || vendedor !== currentProfile.vendedor_nome) return false;
+  return clientesSobMinhaResponsabilidade().has(cliente);
+}
 function galeriaClientesDisponiveis(vendedor){
   const set = new Set();
   galeriaMidias.filter(m=>m.vendedor===vendedor).forEach(m=>{ if(m.cliente) set.add(m.cliente); });
   galeriaPastas.filter(pp=>pp.vendedor===vendedor).forEach(pp=>{ if(pp.cliente) set.add(pp.cliente); });
+  if(!isAdmin() && currentProfile && vendedor===currentProfile.vendedor_nome){
+    const meusClientes = clientesSobMinhaResponsabilidade();
+    galeriaMidias.forEach(m=>{ if(m.cliente && meusClientes.has(m.cliente)) set.add(m.cliente); });
+    galeriaPastas.forEach(pp=>{ if(pp.cliente && meusClientes.has(pp.cliente)) set.add(pp.cliente); });
+  }
   return Array.from(set).sort();
 }
 function galeriaSubpastasDisponiveis(vendedor, cliente){
   const set = new Set();
-  galeriaMidias.filter(m=>m.vendedor===vendedor && m.cliente===cliente).forEach(m=>{ if(m.subpasta) set.add(m.subpasta); });
-  galeriaPastas.filter(pp=>pp.vendedor===vendedor && pp.cliente===cliente).forEach(pp=>{ if(pp.subpasta) set.add(pp.subpasta); });
+  const compartilhado = galeriaClienteCompartilhado(vendedor, cliente);
+  galeriaMidias.filter(m=> m.cliente===cliente && (compartilhado || m.vendedor===vendedor)).forEach(m=>{ if(m.subpasta) set.add(m.subpasta); });
+  galeriaPastas.filter(pp=> pp.cliente===cliente && (compartilhado || pp.vendedor===vendedor)).forEach(pp=>{ if(pp.subpasta) set.add(pp.subpasta); });
   return Array.from(set).sort();
 }
 function galeriaArquivosDisponiveis(vendedor, cliente, subpasta){
-  return galeriaMidias.filter(m=>m.vendedor===vendedor && m.cliente===cliente && m.subpasta===subpasta);
+  const compartilhado = galeriaClienteCompartilhado(vendedor, cliente);
+  return galeriaMidias.filter(m=> m.cliente===cliente && m.subpasta===subpasta && (compartilhado || m.vendedor===vendedor));
+}
+
+// ============================================================================
+// Histórico do pedido (Atualização 2026-11-04, pedido do usuário) — registro
+// PERMANENTE de toda alteração relevante feita num pedido: criação, edição de
+// campos, itens, notas fiscais, documentos sem nota, coleta, cancelamento/
+// finalização e confirmação de produção. Cada chamada de `registrarHistorico`
+// grava uma ou mais linhas (uma por campo alterado, quando aplicável) na
+// tabela `pedido_historico` — ver migracao_5_1.sql. A tabela só tem política
+// de INSERT e SELECT no Supabase (sem UPDATE nem DELETE pra ninguém, nem
+// admin), então o que é registrado aqui não pode ser alterado nem apagado
+// depois — é exatamente o "imutável" pedido pelo usuário. Fica escondido por
+// padrão dentro do card do pedido (botão pequeno "Histórico do pedido", pra
+// não poluir a tela) e só carrega quando a pessoa abre.
+// ============================================================================
+function nomeUsuarioAtual(){
+  return (currentProfile && (currentProfile.nome || currentProfile.vendedor_nome)) || 'Usuário';
+}
+async function registrarHistorico(pedidoDbId, linhas){
+  if(!pedidoDbId || !linhas) return;
+  const lista = (Array.isArray(linhas) ? linhas : [linhas]).filter(Boolean);
+  if(!lista.length) return;
+  const payload = lista.map(descricao=>({
+    pedido_id: pedidoDbId,
+    usuario_id: currentUser ? currentUser.id : null,
+    usuario_nome: nomeUsuarioAtual(),
+    descricao
+  }));
+  const { error } = await sb.from('pedido_historico').insert(payload);
+  // Nunca trava a ação principal por causa do histórico (ex.: tabela ainda
+  // não criada porque a migracao_5_1.sql não rodou) — só avisa no console.
+  if(error) console.error('Não consegui registrar o histórico do pedido (rode a migracao_5_1.sql?).', error);
+}
+// Compara campos de dois objetos (mesma forma camelCase) usando um mapa
+// { chave: 'Rótulo pra exibir' } e devolve só as linhas que realmente
+// mudaram, no formato 'Rótulo: de "X" para "Y"'. Usado nas telas de edição
+// geral do pedido/item, onde o payload tem muitos campos de uma vez.
+function diffCampos(antigo, novo, labels){
+  const linhas = [];
+  Object.keys(labels).forEach(chave=>{
+    const a = antigo ? antigo[chave] : undefined;
+    const n = novo ? novo[chave] : undefined;
+    const av = (a===undefined||a===null) ? '' : String(a).trim();
+    const nv = (n===undefined||n===null) ? '' : String(n).trim();
+    if(av !== nv){
+      linhas.push(`${labels[chave]}: de "${av || '-'}" para "${nv || '-'}"`);
+    }
+  });
+  return linhas;
+}
+async function fetchHistoricoPedido(pedidoDbId){
+  const { data, error } = await sb.from('pedido_historico').select('*').eq('pedido_id', pedidoDbId).order('criado_em', { ascending: false });
+  if(error){
+    if(/pedido_historico/i.test(error.message||'') || error.code === '42P01'){
+      return { semTabela: true, linhas: [] };
+    }
+    console.error(error);
+    return { semTabela: false, linhas: [] };
+  }
+  return { semTabela: false, linhas: data || [] };
+}
+async function toggleHistoricoPedido(id){
+  historicoPedidoAberto = !historicoPedidoAberto;
+  if(historicoPedidoAberto){
+    const p = pedidos.find(x=>x.id===id);
+    const resultado = p ? await fetchHistoricoPedido(p.dbId) : { semTabela:false, linhas:[] };
+    historicoPedidoCache = resultado.linhas;
+    historicoPedidoSemTabela = resultado.semTabela;
+  }
+  openDetail(id);
 }
 
 function galeriaAbrirVendedor(nome){ galeriaSelVendedor=nome; galeriaSelCliente=null; galeriaSelSubpasta=null; galeriaNivel='cliente'; renderGaleria(); }
@@ -2419,11 +2525,12 @@ function renderGaleria(){
     const nomes = galeriaClientesDisponiveis(galeriaSelVendedor);
     vazioEl.style.display = nomes.length ? 'none' : 'block';
     wrap.innerHTML = nomes.map(c=>{
-      const qtd = galeriaMidias.filter(m=>m.vendedor===galeriaSelVendedor && m.cliente===c).length;
+      const compartilhado = galeriaClienteCompartilhado(galeriaSelVendedor, c);
+      const qtd = galeriaMidias.filter(m=> m.cliente===c && (compartilhado || m.vendedor===galeriaSelVendedor)).length;
       return `<div class="galeria-folder">
         <div onclick="galeriaAbrirCliente('${escJs(c)}')" style="cursor:pointer;">
           <span class="icon">🗂️</span>
-          <div class="nome">${c}</div>
+          <div class="nome">${c}${compartilhado ? ' <span class="detail-sub" style="font-size:10px;">(compartilhada)</span>' : ''}</div>
           <div class="qtd">${qtd} ${qtd===1?'arquivo':'arquivos'}</div>
         </div>
         <div style="margin-top:6px;"><span style="color:var(--erro); cursor:pointer; font-weight:700; font-size:11px;" onclick="event.stopPropagation(); galeriaRemoverPasta('cliente','${escJs(c)}')">remover pasta</span></div>
@@ -2435,8 +2542,9 @@ function renderGaleria(){
     document.getElementById('galeria-nova-pasta-nome').placeholder = 'Nome da pasta (ex: nº do pedido/OC)...';
     const nomes = galeriaSubpastasDisponiveis(galeriaSelVendedor, galeriaSelCliente);
     vazioEl.style.display = nomes.length ? 'none' : 'block';
+    const compartilhadoCliente = galeriaClienteCompartilhado(galeriaSelVendedor, galeriaSelCliente);
     wrap.innerHTML = nomes.map(s=>{
-      const qtd = galeriaMidias.filter(m=>m.vendedor===galeriaSelVendedor && m.cliente===galeriaSelCliente && m.subpasta===s).length;
+      const qtd = galeriaMidias.filter(m=> m.cliente===galeriaSelCliente && m.subpasta===s && (compartilhadoCliente || m.vendedor===galeriaSelVendedor)).length;
       return `<div class="galeria-folder">
         <div onclick="galeriaAbrirSubpasta('${escJs(s)}')" style="cursor:pointer;">
           <span class="icon">📁</span>
@@ -2479,13 +2587,19 @@ async function galeriaCriarPasta(){
 }
 
 async function galeriaRemoverPasta(nivel, nome){
+  // Cliente compartilhado (regra da galeria, Atualização 2026-11-04): remover
+  // aqui remove o que está sendo mostrado na tela — ou seja, se a pasta do
+  // cliente está compartilhada entre vendedoras, remove os arquivos de todas,
+  // não só os meus, pra ficar consistente com o que a própria tela já exibe.
   let matchMidia, matchPasta;
   if(nivel === 'cliente'){
-    matchMidia = m=>m.vendedor===galeriaSelVendedor && m.cliente===nome;
-    matchPasta = pp=>pp.vendedor===galeriaSelVendedor && pp.cliente===nome;
+    const compartilhado = galeriaClienteCompartilhado(galeriaSelVendedor, nome);
+    matchMidia = m=> m.cliente===nome && (compartilhado || m.vendedor===galeriaSelVendedor);
+    matchPasta = pp=> pp.cliente===nome && (compartilhado || pp.vendedor===galeriaSelVendedor);
   } else if(nivel === 'subpasta'){
-    matchMidia = m=>m.vendedor===galeriaSelVendedor && m.cliente===galeriaSelCliente && m.subpasta===nome;
-    matchPasta = pp=>pp.vendedor===galeriaSelVendedor && pp.cliente===galeriaSelCliente && pp.subpasta===nome;
+    const compartilhado = galeriaClienteCompartilhado(galeriaSelVendedor, galeriaSelCliente);
+    matchMidia = m=> m.cliente===galeriaSelCliente && m.subpasta===nome && (compartilhado || m.vendedor===galeriaSelVendedor);
+    matchPasta = pp=> pp.cliente===galeriaSelCliente && pp.subpasta===nome && (compartilhado || pp.vendedor===galeriaSelVendedor);
   } else return;
 
   const arquivosNaPasta = galeriaMidias.filter(matchMidia);
@@ -3630,6 +3744,7 @@ async function lancarPedido(){
     if(btn){ btn.disabled = false; btn.textContent = 'Lançar pedido'; }
     return;
   }
+  registrarHistorico(inserted.id, 'Pedido criado pelo Formulário completo (cliente: ' + (payload.nome_cliente||'-') + ', vendedor: ' + (payload.vendedor||'-') + ', ' + itensLancados.length + ' item(ns)).');
 
   // Versão 4.7: "desenho/foto do item" deixou de ser anexo único do pedido
   // inteiro — agora é por item (ver itensPayload/itensInseridos abaixo). Só
@@ -3736,6 +3851,7 @@ async function criarPedidoRapidoComUmItem({ nomeCliente, cnpj, tipo, dataEntrada
   };
   const { error: itemErr } = await sb.from('itens').insert(itemPayload);
   if(itemErr) return { error: 'Pedido criado, mas houve erro ao salvar o item: ' + (itemErr.message||''), pedidoId: inserted.id };
+  registrarHistorico(inserted.id, 'Pedido criado (lançamento rápido) — cliente: ' + (nomeCliente||'-') + ', item ' + (codigo||'-') + ' (qtd ' + (quantidade||'-') + ').');
   const pedidoCompleto = await refetchPedido(inserted.id);
   const resultadoCadastro = await cadastrarItensNovosAutomaticamente(tipo, [{codigo}], nomeCliente);
   buildMonthOptions();
@@ -3891,6 +4007,7 @@ async function duplicarPedido(id){
   };
   const { data: inserted, error } = await sb.from('pedidos').insert(payload).select().single();
   if(error){ mostrarErroSupabase('Erro ao duplicar pedido', error); return; }
+  registrarHistorico(inserted.id, 'Pedido criado como duplicata de ' + p.id + '.');
   const itensPayload = (p.itens||[]).map(it=>{
     const eng = itemEngenhariaParaPayload(it);
     return Object.assign({
@@ -4829,6 +4946,8 @@ function openDetail(id){
   if(abaDetalhePedidoId !== id){
     abaDetalheAtual = 'dados';
     abaDetalhePedidoId = id;
+    historicoPedidoAberto = false;
+    historicoPedidoCache = [];
   }
 
   if(itensDocSemNotaPedidoId !== id){
@@ -5080,8 +5199,25 @@ function openDetail(id){
 
   overlay.innerHTML = `
     <div class="detail-card">
-      <div class="detail-head"><h2>${p.id} <span class="cargo-badge">${p.tipo}</span></h2><span class="close" onclick="closeDetail()">&times;</span></div>
+      <div class="detail-head">
+        <h2>${p.id} <span class="cargo-badge">${p.tipo}</span></h2>
+        <button type="button" class="btn small secondary" style="margin-left:auto; margin-right:10px;" onclick="toggleHistoricoPedido('${p.id}')">🕘 ${historicoPedidoAberto ? 'Fechar histórico' : 'Histórico do pedido'}</button>
+        <span class="close" onclick="closeDetail()">&times;</span>
+      </div>
       <div class="detail-sub">Lançado em ${p.criadoEm}</div>
+      ${historicoPedidoAberto ? `
+      <div class="panel" style="margin-bottom:14px;">
+        <h2 class="secao">Histórico do pedido <span class="detail-sub" style="margin:0;">— registro permanente, não pode ser editado nem apagado</span></h2>
+        ${historicoPedidoSemTabela ? `
+          <div class="detail-sub" style="margin:0;">O histórico ainda não está disponível — rode a migracao_5_1.sql no Supabase pra criar essa tabela.</div>
+        ` : (historicoPedidoCache.length ? historicoPedidoCache.map(h=>`
+          <div style="padding:7px 0; border-bottom:1px solid var(--border);">
+            <div class="detail-sub" style="margin:0 0 2px;">${new Date(h.criado_em).toLocaleString('pt-BR')} — <strong>${escHtml(h.usuario_nome||'—')}</strong></div>
+            <div>${escHtml(h.descricao||'')}</div>
+          </div>
+        `).join('') : '<div class="detail-sub" style="margin:0;">Nenhum evento registrado ainda.</div>')}
+      </div>
+      ` : ''}
       ${avisoCancelado}
       ${avisoFinalizado}
       ${avisoProducao}
@@ -5246,6 +5382,14 @@ function openDetail(id){
           <div class="actions-row" style="margin-top:0;">
             <button class="btn small secondary" onclick="copiarResumoPedido('${p.id}')">Copiar resumo</button>
             <button class="btn small secondary" onclick="enviarResumoPorEmail('${p.id}')">Enviar por e-mail</button>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-bottom:14px;">
+          <h2 class="secao">Resumo em layout planilha (pra colar no e-mail)</h2>
+          <div class="subhead" style="margin-bottom:12px;">Copia uma linha por item, nas mesmas colunas da planilha que você usava antes (cliente, status, nº pedido, código, descrição, liga, quantidade, valores com/sem IPI, RCA, PV etc.). Colunas sem informação no app (UF, País, Lâmina, Empresa, Aplicação, OP PAI, Status pedido, Projetos) ficam em branco — complete à mão antes de mandar, se precisar. Depois de clicar, é só colar (Ctrl+V) direto no corpo do e-mail.</div>
+          <div class="actions-row" style="margin-top:0;">
+            <button class="btn small secondary" onclick="copiarResumoPlanilha('${p.id}')">Copiar layout planilha</button>
           </div>
         </div>
       </div>
@@ -5454,10 +5598,26 @@ async function finalizarAdicionarItemPedido(id){
     const { error } = await sb.from('itens').update(item).eq('id', itemEmEdicao.dbId);
     if(error){ mostrarErroSupabase('Erro ao salvar a edição do item', error); return; }
     itemPedidoEditandoIdx = null;
+    {
+      // Diff campo a campo (histórico) — itemEmEdicao usa as chaves camelCase
+      // do app, `item` usa as chaves snake_case do payload pro Supabase.
+      const camposItem = [
+        ['codigo','codigo','Código'], ['descricao','descricao','Descrição'],
+        ['quantidade','quantidade','Quantidade'], ['valorSemIPI','valor_sem_ipi','Valor sem IPI'],
+        ['liga','liga','Liga'], ['dataEntrega','data_entrega','Data de entrega']
+      ];
+      const linhasDiffItem = camposItem.map(([ck,sk,label])=>{
+        const av = (itemEmEdicao[ck]==null?'':String(itemEmEdicao[ck]).trim());
+        const nv = (item[sk]==null?'':String(item[sk]).trim());
+        return av!==nv ? (label + ' do item "' + (item.codigo||itemEmEdicao.codigo||'-') + '": de "' + (av||'-') + '" para "' + (nv||'-') + '"') : null;
+      }).filter(Boolean);
+      registrarHistorico(p.dbId, linhasDiffItem.length ? linhasDiffItem : ['Item "' + (item.codigo||'-') + '" editado (sem mudança nos campos principais — foto/desenho/engenharia, por exemplo).']);
+    }
   } else {
     item.pedido_id = p.dbId;
     const { data: itemInserido, error } = await sb.from('itens').insert(item).select().single();
     if(error){ mostrarErroSupabase('Erro ao adicionar item', error); return; }
+    registrarHistorico(p.dbId, 'Item "' + (item.codigo||'-') + '" adicionado ao pedido (qtd ' + (item.quantidade||'-') + ', valor sem IPI ' + formatBRL(parseValor(item.valor_sem_ipi)) + ').');
     if(devFotosNovosFiles.length && itemInserido){
       const novasFotos = await uploadFotosDesenvolvimentoItem(itemInserido.id, devFotosNovosFiles, p.dbId);
       if(novasFotos.length){
@@ -5691,6 +5851,7 @@ async function toggleItemProntoPedido(id, idx, marcado){
     : { pronto: false, data_pronto: null };
   const { error } = await sb.from('itens').update(payload).eq('id', item.dbId);
   if(error){ mostrarErroSupabase('Erro ao marcar item como pronto', error); return; }
+  registrarHistorico(p.dbId, marcado ? ('Item "' + (item.codigo||'-') + '" marcado como pronto.') : ('Item "' + (item.codigo||'-') + '" desmarcado como pronto.'));
   await refetchPedido(p.dbId);
   openDetail(id);
   render();
@@ -5700,6 +5861,7 @@ async function atualizarDataProntoItemPedido(id, idx, novaData){
   const item = p.itens[idx];
   const { error } = await sb.from('itens').update({ data_pronto: novaData || null }).eq('id', item.dbId);
   if(error){ mostrarErroSupabase('Erro ao atualizar a data', error); return; }
+  registrarHistorico(p.dbId, 'Data de "pronto" do item "' + (item.codigo||'-') + '": de "' + (item.dataPronto||'-') + '" para "' + (novaData||'-') + '".');
   await refetchPedido(p.dbId);
   openDetail(id);
 }
@@ -5709,6 +5871,7 @@ async function removerItemPedido(id, idx){
   if(itemPedidoEditandoPedidoId === id && itemPedidoEditandoIdx === idx) itemPedidoEditandoIdx = null;
   const { error } = await sb.from('itens').delete().eq('id', item.dbId);
   if(error){ mostrarErroSupabase('Erro ao remover item', error); return; }
+  registrarHistorico(p.dbId, 'Item "' + (item.codigo||'-') + '" removido do pedido.');
   await refetchPedido(p.dbId);
   openDetail(id);
   render();
@@ -5864,6 +6027,7 @@ async function inserirItensNotaComFallback(itensResolvidos, notaId){
 // não muda em nada ali — mesmo código serve pros dois.
 async function sincronizarValorItensPedido(p, itensPayload){
   const fator = fatorIPI(p);
+  const linhasHistorico = [];
   for(const it of (itensPayload||[])){
     if(!it.item_id) continue;
     const itemPedido = (p.itens||[]).find(x=>x.dbId===it.item_id);
@@ -5875,8 +6039,10 @@ async function sincronizarValorItensPedido(p, itensPayload){
     if(Math.abs(novoValorSemIPI - valorAtual) < 0.005) continue; // já bate, não grava à toa
     const { error } = await sb.from('itens').update({ valor_sem_ipi: novoValorSemIPI }).eq('id', it.item_id);
     if(error){ console.error('Não consegui sincronizar o valor do item com o faturamento.', error); continue; }
+    linhasHistorico.push('Valor sem IPI do item "' + (itemPedido.codigo||'-') + '" sincronizado automaticamente a partir do faturamento: de "' + formatBRL(valorAtual) + '" para "' + formatBRL(novoValorSemIPI) + '".');
     itemPedido.valorSemIPI = novoValorSemIPI; // já reflete em memória, pro refetchPedido logo depois não "piscar" com o valor antigo
   }
+  if(linhasHistorico.length) registrarHistorico(p.dbId, linhasHistorico);
 }
 async function gerarNota(id){
   const p = pedidos.find(x=>x.id===id);
@@ -5926,6 +6092,7 @@ async function gerarNota(id){
     if(delErr){ mostrarErroSupabase('Erro ao atualizar os itens da nota', delErr); return; }
     const { error: itensErr } = await inserirItensNotaComFallback(itensResolvidos, editando.dbId);
     if(itensErr){ mostrarErroSupabase('Nota atualizada, mas houve erro ao salvar os itens', itensErr); }
+    registrarHistorico(p.dbId, 'Nota fiscal nº ' + numero + ' editada (itens: ' + itensResolvidos.map(it=>it.codigo||'-').join(', ') + ').');
     notaEditandoIdx = null;
   } else {
     const { data: notaInserida, error } = await sb.from('notas').insert({
@@ -5937,6 +6104,7 @@ async function gerarNota(id){
 
     const { error: itensErr } = await inserirItensNotaComFallback(itensResolvidos, notaInserida.id);
     if(itensErr){ mostrarErroSupabase('Nota gerada, mas houve erro ao salvar os itens', itensErr); }
+    registrarHistorico(p.dbId, 'Nota fiscal nº ' + numero + ' gerada (itens: ' + itensResolvidos.map(it=>it.codigo||'-').join(', ') + ').');
   }
 
   notaItensAtual = [];
@@ -5978,6 +6146,7 @@ async function marcarNotaColetada(id, idx){
   const dataColeta = (dataInput && dataInput.value) || new Date().toISOString().slice(0,10);
   const { error } = await sb.from('notas').update({ coleta_status: 'coletada', coleta_data: dataColeta }).eq('id', nota.dbId);
   if(error){ mostrarErroSupabase('Erro ao marcar coleta', error); return; }
+  registrarHistorico(p.dbId, 'Nota fiscal nº ' + (nota.numero||'-') + ' marcada como coletada em ' + formatarDataBR(dataColeta) + '.');
   await refetchPedido(p.dbId);
   render();
 }
@@ -5986,6 +6155,7 @@ async function desfazerColetaNota(id, idx){
   const nota = p.notas[idx];
   const { error } = await sb.from('notas').update({ coleta_status: 'aguardando', coleta_data: null }).eq('id', nota.dbId);
   if(error){ mostrarErroSupabase('Erro ao desfazer coleta', error); return; }
+  registrarHistorico(p.dbId, 'Coleta da nota fiscal nº ' + (nota.numero||'-') + ' desfeita.');
   await refetchPedido(p.dbId);
   render();
 }
@@ -6011,6 +6181,7 @@ async function marcarDocumentoSemNotaColetado(id, idx){
     }
     mostrarErroSupabase('Erro ao marcar coleta', error); return;
   }
+  registrarHistorico(p.dbId, 'Documento sem nota nº ' + (doc.numero||'-') + ' marcado como coletado em ' + formatarDataBR(dataColeta) + '.');
   await refetchPedido(p.dbId);
   render();
 }
@@ -6025,6 +6196,7 @@ async function desfazerColetaDocumentoSemNota(id, idx){
     }
     mostrarErroSupabase('Erro ao desfazer coleta', error); return;
   }
+  registrarHistorico(p.dbId, 'Coleta do documento sem nota nº ' + (doc.numero||'-') + ' desfeita.');
   await refetchPedido(p.dbId);
   render();
 }
@@ -6033,6 +6205,7 @@ async function removerNota(id, idx){
   const nota = p.notas[idx];
   const { error } = await sb.from('notas').delete().eq('id', nota.dbId);
   if(error){ mostrarErroSupabase('Erro ao remover nota', error); return; }
+  registrarHistorico(p.dbId, 'Nota fiscal nº ' + (nota.numero||'-') + ' removida.');
   // Os índices da lista de notas mudam depois de remover uma — se tinha
   // alguma em edição, cancela pra não ficar editando a nota errada.
   if(notaEditandoPedidoId === id){ notaEditandoIdx = null; notaItensAtual = []; }
@@ -6394,6 +6567,7 @@ async function gerarDocumentoSemNota(id){
   }
   const { error: itensErr } = await inserirItensDocSemNotaComFallback(itensPayload);
   if(itensErr){ mostrarErroSupabase('Documento gerado, mas houve erro ao salvar os itens', itensErr); }
+  registrarHistorico(p.dbId, 'Documento sem nota nº ' + docNumero + ' gerado (itens: ' + itensPayload.map(it=>it.codigo||'-').join(', ') + ').');
   await sincronizarValorItensPedido(p, itensPayload);
 
   itensDocSemNotaAtual = [];
@@ -6417,6 +6591,7 @@ async function removerDocumentoSemNota(id, idx){
   }
   const { error } = await sb.from('documentos_sem_nota').delete().eq('id', doc.dbId);
   if(error){ mostrarErroSupabase('Erro ao remover documento', error); return; }
+  registrarHistorico(p.dbId, 'Documento sem nota nº ' + (doc.numero||'-') + ' removido.');
   await refetchPedido(p.dbId);
   openDetail(id);
   render();
@@ -6514,8 +6689,34 @@ async function salvarDetalhe(id){
     }
   }
 
+  // Diff campo a campo pro histórico (Atualização 2026-11-04) — compara o
+  // payload (chaves snake_case, pro Supabase) com o pedido ainda não
+  // atualizado (`p`, chaves camelCase do app) antes de mandar o UPDATE.
+  const MAPA_CAMPOS_PEDIDO = {
+    nome_cliente: ['nomeCliente','Cliente'], cnpj: ['cnpj','CNPJ'], data_entrada: ['dataEntrada','Data de entrada'],
+    vendedor: ['vendedor','Vendedor'], condicao: ['condicao','Condição de pagamento'], transportadora: ['transportadora','Transportadora'],
+    proposta: ['proposta','Proposta (PV)'], numero_oc: ['numeroOC','Número da OC'], faturamento_data: ['faturamentoData','Data prevista de faturamento'],
+    nota_tipo: ['notaTipo','Nota'], frete: ['frete','Quem paga o frete'], faturamento_tipo: ['faturamentoTipo','Faturamento'],
+    modelo: ['modelo','Modelo'], furacao: ['furacao','Furação'], montagem: ['montagem','Montagem do disco'], refinador: ['refinador','Modelo do refinador'],
+    castanha: ['castanha','Castanha'], parafusos: ['parafusos','Parafusos'], material_modelo: ['materialModelo','Modelo (madeira/isopor)'],
+    posse_entrega: ['posseEntrega','Posse/entrega do modelo'], tratamento: ['tratamento','Tratamento térmico'], obs: ['obs','Observações'],
+    representante_responsavel: ['representanteResponsavel','Representante responsável'], bonus_percent: ['bonusPercent','Bônus (%)'],
+    exportacao: ['exportacao','Exportação'], coleta_status: ['coletaStatus','Status da coleta'], coleta_data: ['coletaData','Data da coleta'],
+    obs_interna: ['obsInterna','Observação interna']
+  };
+  const linhasDiffPedido = Object.keys(payload).map(chaveSnake=>{
+    const mapa = MAPA_CAMPOS_PEDIDO[chaveSnake];
+    if(!mapa) return null;
+    const [campoP, label] = mapa;
+    let av = p[campoP], nv = payload[chaveSnake];
+    if(chaveSnake === 'exportacao'){ av = av ? 'Sim' : 'Não'; nv = nv ? 'Sim' : 'Não'; }
+    av = (av==null?'':String(av).trim()); nv = (nv==null?'':String(nv).trim());
+    return av!==nv ? (label + ': de "' + (av||'-') + '" para "' + (nv||'-') + '"') : null;
+  }).filter(Boolean);
+
   const { error } = await sb.from('pedidos').update(payload).eq('id', p.dbId);
   if(error){ mostrarErroSupabase('Erro ao salvar', error); return; }
+  if(linhasDiffPedido.length) registrarHistorico(p.dbId, linhasDiffPedido);
   if(obsInternaMudou) notificarObsInterna(p, payload.obs_interna);
 
   // Versão 4.7: "d-desenhoArquivo" saiu — desenho virou por item (ver
@@ -6526,6 +6727,7 @@ async function salvarDetalhe(id){
     if(ocUp){
       const { error: anexoErr } = await sb.from('pedidos').update({ ordem_compra_arquivo_url: ocUp.path, ordem_compra_arquivo_nome: ocUp.nome }).eq('id', p.dbId);
       if(anexoErr) console.error(anexoErr);
+      else registrarHistorico(p.dbId, 'Arquivo da OC trocado/anexado (' + (ocUp.nome||'-') + ').');
     }
   }
 
@@ -6602,6 +6804,7 @@ async function removerAnexoPedido(id, tipo){
     : { desenho_arquivo_url: null, desenho_arquivo_nome: null };
   const { error } = await sb.from('pedidos').update(upd).eq('id', p.dbId);
   if(error){ mostrarErroSupabase('Erro ao remover anexo', error); return; }
+  registrarHistorico(p.dbId, (tipo === 'oc' ? 'Anexo da OC' : 'Anexo do desenho') + ' removido.');
   await refetchPedido(p.dbId);
   showToast('Anexo removido.');
   openDetail(id);
@@ -6641,6 +6844,7 @@ async function confirmarCancelarPedido(id){
   const motivo = val('d-motivoCancelamento');
   const { error } = await sb.from('pedidos').update({ cancelado: true, cancelado_em: new Date().toISOString(), motivo_cancelamento: motivo || null }).eq('id', p.dbId);
   if(error){ mostrarErroSupabase('Erro ao cancelar', error); return; }
+  registrarHistorico(p.dbId, 'Pedido cancelado.' + (motivo ? (' Motivo: ' + motivo) : ''));
   await refetchPedido(p.dbId);
   showToast(p.id + ' cancelado.');
   openDetail(id);
@@ -6651,6 +6855,7 @@ async function reativarPedido(id){
   if(!p) return;
   const { error } = await sb.from('pedidos').update({ cancelado: false, cancelado_em: null, motivo_cancelamento: null }).eq('id', p.dbId);
   if(error){ mostrarErroSupabase('Erro ao reativar', error); return; }
+  registrarHistorico(p.dbId, 'Pedido reativado (cancelamento desfeito).');
   await refetchPedido(p.dbId);
   showToast(p.id + ' reativado.');
   openDetail(id);
@@ -6665,6 +6870,7 @@ async function finalizarPedido(id){
   if(!p) return;
   const { error } = await sb.from('pedidos').update({ finalizado: true, finalizado_em: new Date().toISOString() }).eq('id', p.dbId);
   if(error){ mostrarErroSupabase('Erro ao finalizar', error); return; }
+  registrarHistorico(p.dbId, 'Pedido marcado como finalizado.');
   await refetchPedido(p.dbId);
   showToast(p.id + ' marcado como finalizado.');
   openDetail(id);
@@ -6676,6 +6882,7 @@ async function reabrirPedidoFinalizado(id){
   if(!p) return;
   const { error } = await sb.from('pedidos').update({ finalizado: false, finalizado_em: null }).eq('id', p.dbId);
   if(error){ mostrarErroSupabase('Erro ao reabrir pedido', error); return; }
+  registrarHistorico(p.dbId, 'Pedido reaberto (finalização desfeita).');
   await refetchPedido(p.dbId);
   showToast(p.id + ' reaberto.');
   openDetail(id);
@@ -6771,6 +6978,120 @@ function enviarResumoPorEmail(id){
   window.location.href = 'mailto:?subject=' + assunto + '&body=' + corpo;
   oferecerDownloadArquivosProducao(id);
 }
+
+// ============================================================================
+// Resumo em layout planilha (Atualização 2026-11-04, pedido do usuário) —
+// imita a planilha que ele usava antes pra formalizar a ordem de produção por
+// e-mail ("eu copiava e mandava no email"): uma linha por item, nas mesmas
+// colunas de um export de ERP (ver imagem anexada no pedido). Como um corpo
+// de "mailto:" só aceita texto puro (não dá pra mandar uma tabela formatada
+// por ali), esse resumo é pensado pra outro fluxo — igual ao antigo: clica
+// em "Copiar layout planilha", abre o e-mail (Gmail/Outlook) e cola (Ctrl+V)
+// direto no corpo; como copia em HTML (via Clipboard API), cola como uma
+// tabela de verdade, com linhas e colunas, não como texto corrido.
+//
+// Mapeamento de colunas (pedido do usuário: "usar o que já existe e as
+// informações que não temos, não criar campo" — por isso várias colunas
+// ficam em branco de propósito, sem inventar dado nem criar campo novo):
+// CLIENTE/Nº PEDIDO/DATA/RCA/Nº Pedido Venda vêm do pedido; STATUS vem de
+// `situacaoItem` (mesma lógica já usada no resto do app); COD/DESCRIÇÃO DO
+// ITEM/LIGA/QTY PC/PRAZO DE ENTREGA vêm de cada item; DIAM usa a polegada do
+// disco quando o item é de discos; QTY/PESO UNITÁRIO e UND refletem se o item
+// foi precificado por peça ou por kg; VALOR DO PEDIDO S/IPI, C/IPI, "%" e
+// "VALOR" vêm de `fatorIPI` (mesma regra de +3,25% já usada no faturamento).
+// UF, PAÍS, LÂMINA, EMPRESA, APLICAÇÃO, OP PAI, STATUS PEDIDO e PROJETOS não
+// existem nos dados do app hoje — ficam em branco pra completar à mão.
+const COLUNAS_RESUMO_PLANILHA = [
+  'CLIENTE','STATUS','UF','PAÍS','Nº PEDIDO','DATA','COD','DESCRIÇÃO DO ITEM','LIGA','LÂMINA','DIAM',
+  'QTY/PESO UNITÁRIO','UND','QTY PC','VALOR DO PEDIDO S/IPI','VALOR DO PEDIDO C/IPI','%','VALOR',
+  'RCA','EMPRESA','APLICAÇÃO','Nº Pedido Venda','OP PAI','STATUS PEDIDO','PRAZO DE ENTREGA','PROJETOS'
+];
+function linhasResumoPlanilha(id){
+  const p = pedidos.find(x=>x.id===id);
+  if(!p) return [];
+  const fator = fatorIPI(p);
+  const percentIPI = fator > 1 ? '3,25%' : '0%';
+  if(!p.itens || !p.itens.length) return [];
+  return p.itens.map(it=>{
+    const valorSemIPI = parseValor(it.valorSemIPI);
+    const valorComIPI = valorSemIPI * fator;
+    const valorIPI = valorComIPI - valorSemIPI;
+    const precificadoPorKg = !!(it.peso && it.valorKgUnit);
+    return {
+      'CLIENTE': p.nomeCliente || '',
+      'STATUS': situacaoItem(p, it) || '',
+      'UF': '',
+      'PAÍS': '',
+      'Nº PEDIDO': p.id || '',
+      'DATA': formatarDataBR(p.dataEntrada),
+      'COD': it.codigo || '',
+      'DESCRIÇÃO DO ITEM': it.descricao || '',
+      'LIGA': it.liga || '',
+      'LÂMINA': '',
+      'DIAM': it.discoPolegada || '',
+      'QTY/PESO UNITÁRIO': it.peso || '',
+      'UND': precificadoPorKg ? 'KG' : 'PC',
+      'QTY PC': it.quantidade || '',
+      'VALOR DO PEDIDO S/IPI': formatBRL(valorSemIPI),
+      'VALOR DO PEDIDO C/IPI': formatBRL(valorComIPI),
+      '%': percentIPI,
+      'VALOR': formatBRL(valorIPI),
+      'RCA': p.representante || p.representanteResponsavel || '',
+      'EMPRESA': '',
+      'APLICAÇÃO': '',
+      'Nº Pedido Venda': p.proposta || '',
+      'OP PAI': '',
+      'STATUS PEDIDO': '',
+      'PRAZO DE ENTREGA': formatarDataBR(it.dataEntrega),
+      'PROJETOS': ''
+    };
+  });
+}
+function gerarHtmlResumoPlanilha(id){
+  const p = pedidos.find(x=>x.id===id);
+  const linhas = linhasResumoPlanilha(id);
+  const cabecalho = 'Segue abaixo a ordem de produção do PV ' + (p && p.proposta ? p.proposta : (p ? p.id : '')) +
+    (p && p.numeroOC ? (' (OC ' + p.numeroOC + ')') : '') + '_' + (p ? (p.nomeCliente||'-') : '') + ' @Prometals';
+  const escCel = (s)=> escHtml(s==null ? '' : String(s));
+  const theadHtml = COLUNAS_RESUMO_PLANILHA.map(c=>`<th style="border:1px solid #999; padding:4px 6px; background:#eee; font-family:Arial,sans-serif; font-size:12px; white-space:nowrap;">${escCel(c)}</th>`).join('');
+  const linhasHtml = linhas.map(linha=>{
+    const celulas = COLUNAS_RESUMO_PLANILHA.map(c=>`<td style="border:1px solid #999; padding:4px 6px; font-family:Arial,sans-serif; font-size:12px; white-space:nowrap;">${escCel(linha[c])}</td>`).join('');
+    return `<tr>${celulas}</tr>`;
+  }).join('');
+  return `<div style="font-family:Arial,sans-serif; font-size:13px; margin-bottom:8px;">${escHtml(cabecalho)}</div>` +
+    `<table style="border-collapse:collapse;"><thead><tr>${theadHtml}</tr></thead><tbody>${linhasHtml}</tbody></table>`;
+}
+function gerarTextoResumoPlanilha(id){
+  const linhas = linhasResumoPlanilha(id);
+  const partes = [COLUNAS_RESUMO_PLANILHA.join('\t')];
+  linhas.forEach(linha=> partes.push(COLUNAS_RESUMO_PLANILHA.map(c=> linha[c]==null?'':String(linha[c])).join('\t')));
+  return partes.join('\n');
+}
+async function copiarResumoPlanilha(id){
+  const p = pedidos.find(x=>x.id===id);
+  if(!p || !p.itens || !p.itens.length){ showToast('Esse pedido não tem itens pra copiar.'); return; }
+  const html = gerarHtmlResumoPlanilha(id);
+  const texto = gerarTextoResumoPlanilha(id);
+  try{
+    if(window.ClipboardItem){
+      // Copia os dois formatos juntos — colar num e-mail (Gmail/Outlook em
+      // modo rico) usa o HTML e sai como tabela de verdade; colar num campo
+      // só-texto usa o texto (colunas separadas por tab, como um .csv).
+      const item = new ClipboardItem({
+        'text/html': new Blob([html], {type:'text/html'}),
+        'text/plain': new Blob([texto], {type:'text/plain'})
+      });
+      await navigator.clipboard.write([item]);
+    } else {
+      await navigator.clipboard.writeText(texto);
+    }
+    showToast('Layout planilha copiado — cole (Ctrl+V) no corpo do e-mail.');
+  }catch(e){
+    console.error(e);
+    try{ await navigator.clipboard.writeText(texto); showToast('Copiado como texto (sem formatação de tabela) — seu navegador não permitiu copiar com formatação.'); }
+    catch(e2){ showToast('Não foi possível copiar automaticamente.'); }
+  }
+}
 // Versão 4.8: depois de copiar/enviar o resumo pra produção, oferece baixar
 // de uma vez só todos os arquivos que a produção normalmente precisa — a OC
 // do pedido e o desenho de cada item (com fallback pro desenho legado do
@@ -6805,6 +7126,7 @@ async function confirmarProducao(id){
   if(!p) return;
   const { error } = await sb.from('pedidos').update({ status: 'producao', producao_confirmada_em: new Date().toISOString() }).eq('id', p.dbId);
   if(error){ mostrarErroSupabase('Erro ao confirmar produção', error); return; }
+  registrarHistorico(p.dbId, 'Pedido confirmado para produção.');
   await refetchPedido(p.dbId);
   showToast(p.id + ' marcado como em produção.');
   openDetail(id);
