@@ -5378,17 +5378,10 @@ function openDetail(id){
 
         <div class="panel" style="margin-bottom:14px;">
           <h2 class="secao">Resumo do pedido (para formalizar produção por e-mail)</h2>
-          <div class="subhead" style="margin-bottom:12px;">Traz cliente, data de entrada, PV, OC e transportadora, seguidos de cada item com quantidade, liga, data de entrega e, pra fundidos, peso, modelo, industrialização da peça e entrega do modelo. Preencha esses campos acima (e, pra fundidos, em cada item) antes de gerar.</div>
+          <div class="subhead" style="margin-bottom:12px;">Traz cliente, data de entrada, PV, OC e transportadora, seguidos de cada item com quantidade, liga, data de entrega e, pra fundidos, peso, modelo, industrialização da peça e entrega do modelo. Preencha esses campos acima (e, pra fundidos, em cada item) antes de gerar. "Copiar layout planilha" copia no formato de tabela (cliente, data, código, descrição, liga, diâmetro quando é disco, quantidade/peso, valores com/sem IPI, PV e prazo de entrega) — cole (Ctrl+V) direto no corpo do e-mail.</div>
           <div class="actions-row" style="margin-top:0;">
             <button class="btn small secondary" onclick="copiarResumoPedido('${p.id}')">Copiar resumo</button>
             <button class="btn small secondary" onclick="enviarResumoPorEmail('${p.id}')">Enviar por e-mail</button>
-          </div>
-        </div>
-
-        <div class="panel" style="margin-bottom:14px;">
-          <h2 class="secao">Resumo em layout planilha (pra colar no e-mail)</h2>
-          <div class="subhead" style="margin-bottom:12px;">Copia uma linha por item, com cliente, status, nº pedido, data, código, descrição, liga, diâmetro, quantidade/peso, valores com/sem IPI, PV e prazo de entrega. Depois de clicar, é só colar (Ctrl+V) direto no corpo do e-mail.</div>
-          <div class="actions-row" style="margin-top:0;">
             <button class="btn small secondary" onclick="copiarResumoPlanilha('${p.id}')">Copiar layout planilha</button>
           </div>
         </div>
@@ -7010,22 +7003,31 @@ function enviarResumoPorEmail(id){
 // direto no corpo; como copia em HTML (via Clipboard API), cola como uma
 // tabela de verdade, com linhas e colunas, não como texto corrido.
 //
-// Mapeamento de colunas: CLIENTE/Nº PEDIDO/DATA/Nº Pedido Venda vêm do
-// pedido; STATUS vem de `situacaoItem` (mesma lógica já usada no resto do
-// app); COD/DESCRIÇÃO DO ITEM/LIGA/QTY PC/PRAZO DE ENTREGA vêm de cada item;
-// DIAM usa a polegada do disco quando o item é de discos; QTY/PESO UNITÁRIO
-// e UND refletem se o item foi precificado por peça ou por kg; VALOR DO
-// PEDIDO S/IPI e C/IPI vêm de `fatorIPI` (mesma regra de +3,25% já usada no
-// faturamento).
+// Mapeamento de colunas: CLIENTE/DATA/Nº Pedido Venda vêm do pedido;
+// COD/DESCRIÇÃO DO ITEM/LIGA/QTY PC/PRAZO DE ENTREGA vêm de cada item; DIAM
+// usa a polegada do disco (só discos — ver `colunasResumoPlanilha`);
+// QTY/PESO UNITÁRIO e UND refletem se o item foi precificado por peça ou
+// por kg; VALOR DO PEDIDO S/IPI e C/IPI vêm de `fatorIPI` (mesma regra de
+// +3,25% já usada no faturamento).
 // Versão 2026-11-04 (pedido do usuário): removidas as colunas UF, PAÍS,
 // LÂMINA, "%", VALOR, RCA, EMPRESA, APLICAÇÃO, OP PAI, STATUS PEDIDO e
 // PROJETOS — não existiam nos dados do app (ficavam em branco) e o usuário
 // pediu pra tirar da planilha, em vez de deixar em branco.
-const COLUNAS_RESUMO_PLANILHA = [
-  'CLIENTE','STATUS','Nº PEDIDO','DATA','COD','DESCRIÇÃO DO ITEM','LIGA','DIAM',
-  'QTY/PESO UNITÁRIO','UND','QTY PC','VALOR DO PEDIDO S/IPI','VALOR DO PEDIDO C/IPI',
-  'Nº Pedido Venda','PRAZO DE ENTREGA'
-];
+// Versão 2026-11-05 (pedido do usuário): removidas também STATUS e Nº
+// PEDIDO; DIAM só aparece pra pedidos de discos (fundidos não tem diâmetro
+// de disco, então a coluna nem faz sentido ali); e VALOR DO PEDIDO C/IPI só
+// aparece quando o pedido realmente tem IPI (`fatorIPI(p) > 1`) — pedido
+// "Sem NF"/exportação não tem IPI, então mostrar uma coluna igual à de
+// "S/IPI" só confundiria. Por isso a lista de colunas agora depende do
+// pedido (`colunasResumoPlanilha(p)`), não é mais uma lista fixa.
+function colunasResumoPlanilha(p){
+  const cols = ['CLIENTE','DATA','COD','DESCRIÇÃO DO ITEM','LIGA'];
+  if(p.tipo !== 'fundidos') cols.push('DIAM');
+  cols.push('QTY/PESO UNITÁRIO','UND','QTY PC','VALOR DO PEDIDO S/IPI');
+  if(fatorIPI(p) > 1) cols.push('VALOR DO PEDIDO C/IPI');
+  cols.push('Nº Pedido Venda','PRAZO DE ENTREGA');
+  return cols;
+}
 function linhasResumoPlanilha(id){
   const p = pedidos.find(x=>x.id===id);
   if(!p) return [];
@@ -7037,8 +7039,6 @@ function linhasResumoPlanilha(id){
     const precificadoPorKg = !!(it.peso && it.valorKgUnit);
     return {
       'CLIENTE': p.nomeCliente || '',
-      'STATUS': situacaoItem(p, it) || '',
-      'Nº PEDIDO': p.id || '',
       'DATA': formatarDataBR(p.dataEntrada),
       'COD': it.codigo || '',
       'DESCRIÇÃO DO ITEM': it.descricao || '',
@@ -7057,21 +7057,24 @@ function linhasResumoPlanilha(id){
 function gerarHtmlResumoPlanilha(id){
   const p = pedidos.find(x=>x.id===id);
   const linhas = linhasResumoPlanilha(id);
-  const cabecalho = 'Segue abaixo a ordem de produção do PV ' + (p && p.proposta ? p.proposta : (p ? p.id : '')) +
-    (p && p.numeroOC ? (' (OC ' + p.numeroOC + ')') : '') + '_' + (p ? (p.nomeCliente||'-') : '') + ' @Prometals';
+  const colunas = p ? colunasResumoPlanilha(p) : [];
   const escCel = (s)=> escHtml(s==null ? '' : String(s));
-  const theadHtml = COLUNAS_RESUMO_PLANILHA.map(c=>`<th style="border:1px solid #999; padding:4px 6px; background:#eee; font-family:Arial,sans-serif; font-size:12px; white-space:nowrap;">${escCel(c)}</th>`).join('');
+  const theadHtml = colunas.map(c=>`<th style="border:1px solid #999; padding:4px 6px; background:#eee; font-family:Arial,sans-serif; font-size:12px; white-space:nowrap;">${escCel(c)}</th>`).join('');
   const linhasHtml = linhas.map(linha=>{
-    const celulas = COLUNAS_RESUMO_PLANILHA.map(c=>`<td style="border:1px solid #999; padding:4px 6px; font-family:Arial,sans-serif; font-size:12px; white-space:nowrap;">${escCel(linha[c])}</td>`).join('');
+    const celulas = colunas.map(c=>`<td style="border:1px solid #999; padding:4px 6px; font-family:Arial,sans-serif; font-size:12px; white-space:nowrap;">${escCel(linha[c])}</td>`).join('');
     return `<tr>${celulas}</tr>`;
   }).join('');
-  return `<div style="font-family:Arial,sans-serif; font-size:13px; margin-bottom:8px;">${escHtml(cabecalho)}</div>` +
-    `<table style="border-collapse:collapse;"><thead><tr>${theadHtml}</tr></thead><tbody>${linhasHtml}</tbody></table>`;
+  // Versão 2026-11-05 (pedido do usuário): "não precisa puxar a mensagem
+  // 'Segue abaixo a ordem de produção...'" — removido o cabeçalho de texto
+  // antes da tabela; copia só a planilha.
+  return `<table style="border-collapse:collapse;"><thead><tr>${theadHtml}</tr></thead><tbody>${linhasHtml}</tbody></table>`;
 }
 function gerarTextoResumoPlanilha(id){
+  const p = pedidos.find(x=>x.id===id);
   const linhas = linhasResumoPlanilha(id);
-  const partes = [COLUNAS_RESUMO_PLANILHA.join('\t')];
-  linhas.forEach(linha=> partes.push(COLUNAS_RESUMO_PLANILHA.map(c=> linha[c]==null?'':String(linha[c])).join('\t')));
+  const colunas = p ? colunasResumoPlanilha(p) : [];
+  const partes = [colunas.join('\t')];
+  linhas.forEach(linha=> partes.push(colunas.map(c=> linha[c]==null?'':String(linha[c])).join('\t')));
   return partes.join('\n');
 }
 async function copiarResumoPlanilha(id){
