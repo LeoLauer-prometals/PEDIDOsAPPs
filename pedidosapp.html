@@ -6025,21 +6025,41 @@ async function inserirItensNotaComFallback(itensResolvidos, notaId){
 // `itens.valor_sem_ipi` é sempre a base SEM IPI. No documento sem nota o IPI
 // nunca se aplica (`fatorIPI` sempre devolve 1 pra "Sem NF"), então a conta
 // não muda em nada ali — mesmo código serve pros dois.
+//
+// Correção 2026-11-05 (pedido do usuário: "quando eu faturo 1 peça de 100, o
+// valor total vai ser de uma peça só?"): SIM, era exatamente isso que
+// acontecia antes desta correção — um bug real. `itens.valor_sem_ipi` é o
+// valor TOTAL do item pra TODA a quantidade registrada no pedido (ex.: 5
+// peças), não o valor de uma entrega parcial. O valor informado na nota/
+// documento é o valor só da quantidade QUE ESTÁ SENDO FATURADA NAQUELA LINHA
+// (`it.quantidade`), que pode ser parcial (ex.: faturar 1 das 5 peças por
+// R$100). Gravar esse R$100 direto como novo total do item deixaria o
+// pedido registrado como se as 5 peças juntas valessem R$100 (em vez de
+// R$500) — errado. Agora acha o valor UNITÁRIO faturado (valor informado
+// dividido pela quantidade dessa linha) e escala pela quantidade TOTAL do
+// item antes de gravar, preservando o total correto mesmo em faturamento
+// parcial; só sincroniza quando dá pra calcular um unitário (as duas
+// quantidades precisam estar preenchidas e não-zero).
 async function sincronizarValorItensPedido(p, itensPayload){
   const fator = fatorIPI(p);
   const linhasHistorico = [];
+  const parseQtd = (v)=> parseFloat(String(v||'').replace(',','.')) || 0;
   for(const it of (itensPayload||[])){
     if(!it.item_id) continue;
     const itemPedido = (p.itens||[]).find(x=>x.dbId===it.item_id);
     if(!itemPedido) continue;
     const valorInformado = parseValor(it.valor);
     if(!valorInformado) continue;
-    const novoValorSemIPI = valorInformado / fator;
+    const qtdFaturadaNestaLinha = parseQtd(it.quantidade);
+    const qtdTotalItem = parseQtd(itemPedido.quantidade);
+    if(!qtdFaturadaNestaLinha || !qtdTotalItem) continue; // sem as duas quantidades não dá pra achar o unitário com segurança
+    const valorUnitarioFaturado = valorInformado / qtdFaturadaNestaLinha;
+    const novoValorSemIPI = (valorUnitarioFaturado / fator) * qtdTotalItem;
     const valorAtual = parseValor(itemPedido.valorSemIPI);
     if(Math.abs(novoValorSemIPI - valorAtual) < 0.005) continue; // já bate, não grava à toa
     const { error } = await sb.from('itens').update({ valor_sem_ipi: novoValorSemIPI }).eq('id', it.item_id);
     if(error){ console.error('Não consegui sincronizar o valor do item com o faturamento.', error); continue; }
-    linhasHistorico.push('Valor sem IPI do item "' + (itemPedido.codigo||'-') + '" sincronizado automaticamente a partir do faturamento: de "' + formatBRL(valorAtual) + '" para "' + formatBRL(novoValorSemIPI) + '".');
+    linhasHistorico.push('Valor sem IPI do item "' + (itemPedido.codigo||'-') + '" sincronizado automaticamente a partir do faturamento (' + qtdFaturadaNestaLinha + ' de ' + qtdTotalItem + ' un.): de "' + formatBRL(valorAtual) + '" para "' + formatBRL(novoValorSemIPI) + '".');
     itemPedido.valorSemIPI = novoValorSemIPI; // já reflete em memória, pro refetchPedido logo depois não "piscar" com o valor antigo
   }
   if(linhasHistorico.length) registrarHistorico(p.dbId, linhasHistorico);
