@@ -2364,12 +2364,16 @@ function galeriaVendedoresDisponiveis(){
 }
 // Regra da galeria (Atualização 2026-11-04, pedido do usuário): "quando entrar
 // um pedido do Antonio e a Ranielly for responsável pelo pedido, aparece a
-// galeria do Antonio para a Ranielly" — ou seja, a pasta de um cliente deixa
-// de ficar só dentro da vendedora que a criou; passa a aparecer também pra
-// quem estiver respondendo hoje pelos pedidos daquele cliente, mesmo que os
-// arquivos já existentes tenham sido guardados por outra vendedora antes.
-// `clientesSobMinhaResponsabilidade` lê isso direto de `pedidos` (já
-// carregado) — não depende de nenhuma coluna nova no banco.
+// galeria do Antonio para a Ranielly" — ajustada em 2026-11-06 depois de uma
+// dúvida real (cliente FND Metals, vendedora=Aline, com 1 pedido onde
+// representante_responsavel=Ranielly): a usuária confirmou que são DOIS
+// níveis de compartilhamento, não um só:
+//  - "Vendedor": sendo vendedora de QUALQUER pedido daquele cliente, a
+//    galeria do cliente INTEIRA aparece (comportamento original).
+//  - "Responsável" (representante_responsavel — campo "quem recebe o
+//    bônus"): sendo só responsável por UM pedido específico daquele
+//    cliente (sem ser a vendedora), SÓ a pasta daquele pedido aparece —
+//    não a galeria inteira do cliente.
 function clientesSobMinhaResponsabilidade(){
   const set = new Set();
   if(!currentProfile || !currentProfile.vendedor_nome) return set;
@@ -2378,35 +2382,72 @@ function clientesSobMinhaResponsabilidade(){
   });
   return set;
 }
+// Pasta(s) de um cliente específico onde sou "responsável" por um pedido
+// (mas não sou a vendedora): casa por `pedido_id` (quando o arquivo foi
+// salvo automaticamente a partir do próprio pedido — nota, documento sem
+// nota etc., que já grava pedido_id) OU pelo nome da subpasta igual ao nº
+// da OC/PV daquele pedido (mesma regra usada em `salvarMidias` pra nomear a
+// pasta), pra cobrir também pasta/arquivo criados manualmente na Galeria.
+function pedidosOndeSouResponsavel(cliente){
+  const result = { subpastas: new Set(), pedidoIds: new Set() };
+  if(!currentProfile || !currentProfile.vendedor_nome) return result;
+  (pedidos||[]).forEach(p=>{
+    if(p.nomeCliente === cliente && p.representanteResponsavel === currentProfile.vendedor_nome){
+      const subpasta = (p.numeroOC || p.proposta || p.id || '').trim();
+      if(subpasta) result.subpastas.add(subpasta);
+      if(p.dbId) result.pedidoIds.add(p.dbId);
+    }
+  });
+  return result;
+}
 // true quando, pra quem está olhando agora (não-admin), o cliente deve
 // mostrar os arquivos de TODAS as vendedoras juntos (compartilhado) em vez
 // de só os da própria pasta — admin continua vendo vendedor por vendedor,
-// sem esse "merge", pra conseguir organizar/auditar a galeria inteira.
+// sem esse "merge", pra conseguir organizar/auditar a galeria inteira. Só
+// reflete o compartilhamento de CLIENTE INTEIRO (regra "Vendedor"); o
+// compartilhamento parcial por pedido/responsável fica em
+// `galeriaItemVisivelPraMim`.
 function galeriaClienteCompartilhado(vendedor, cliente){
   if(isAdmin() || !currentProfile || vendedor !== currentProfile.vendedor_nome) return false;
   return clientesSobMinhaResponsabilidade().has(cliente);
 }
+// Decide se UMA linha (de galeria_midias ou galeria_pastas) deve aparecer
+// pra quem está olhando a pasta `vendedor`/`cliente` agora — reúne as 3
+// regras: (1) a linha já é da própria vendedora; (2) cliente inteiro
+// compartilhado, porque sou vendedora de algum pedido dele; (3) só aquela
+// pasta específica, porque sou responsável por um pedido daquele cliente.
+function galeriaItemVisivelPraMim(vendedor, cliente, item){
+  if(item.vendedor === vendedor) return true;
+  if(isAdmin() || !currentProfile || vendedor !== currentProfile.vendedor_nome) return false;
+  if(clientesSobMinhaResponsabilidade().has(cliente)) return true;
+  const resp = pedidosOndeSouResponsavel(cliente);
+  return resp.subpastas.has(item.subpasta) || !!(item.pedido_id && resp.pedidoIds.has(item.pedido_id));
+}
 function galeriaClientesDisponiveis(vendedor){
   const set = new Set();
-  galeriaMidias.filter(m=>m.vendedor===vendedor).forEach(m=>{ if(m.cliente) set.add(m.cliente); });
-  galeriaPastas.filter(pp=>pp.vendedor===vendedor).forEach(pp=>{ if(pp.cliente) set.add(pp.cliente); });
+  galeriaMidias.forEach(m=>{ if(m.cliente && galeriaItemVisivelPraMim(vendedor, m.cliente, m)) set.add(m.cliente); });
+  galeriaPastas.forEach(pp=>{ if(pp.cliente && galeriaItemVisivelPraMim(vendedor, pp.cliente, pp)) set.add(pp.cliente); });
+  // Mesmo sem nenhum arquivo salvo ainda, o cliente de um pedido onde sou
+  // vendedora ou responsável aparece na lista, pra eu poder abrir a pasta
+  // dele (fica vazia até alguém salvar algo lá).
   if(!isAdmin() && currentProfile && vendedor===currentProfile.vendedor_nome){
-    const meusClientes = clientesSobMinhaResponsabilidade();
-    galeriaMidias.forEach(m=>{ if(m.cliente && meusClientes.has(m.cliente)) set.add(m.cliente); });
-    galeriaPastas.forEach(pp=>{ if(pp.cliente && meusClientes.has(pp.cliente)) set.add(pp.cliente); });
+    (pedidos||[]).forEach(p=>{
+      if((p.vendedor === currentProfile.vendedor_nome || p.representanteResponsavel === currentProfile.vendedor_nome) && p.nomeCliente){ set.add(p.nomeCliente); }
+    });
   }
   return Array.from(set).sort();
 }
 function galeriaSubpastasDisponiveis(vendedor, cliente){
   const set = new Set();
-  const compartilhado = galeriaClienteCompartilhado(vendedor, cliente);
-  galeriaMidias.filter(m=> m.cliente===cliente && (compartilhado || m.vendedor===vendedor)).forEach(m=>{ if(m.subpasta) set.add(m.subpasta); });
-  galeriaPastas.filter(pp=> pp.cliente===cliente && (compartilhado || pp.vendedor===vendedor)).forEach(pp=>{ if(pp.subpasta) set.add(pp.subpasta); });
+  galeriaMidias.filter(m=> m.cliente===cliente && galeriaItemVisivelPraMim(vendedor, cliente, m)).forEach(m=>{ if(m.subpasta) set.add(m.subpasta); });
+  galeriaPastas.filter(pp=> pp.cliente===cliente && galeriaItemVisivelPraMim(vendedor, cliente, pp)).forEach(pp=>{ if(pp.subpasta) set.add(pp.subpasta); });
+  if(!isAdmin() && currentProfile && vendedor===currentProfile.vendedor_nome && !clientesSobMinhaResponsabilidade().has(cliente)){
+    pedidosOndeSouResponsavel(cliente).subpastas.forEach(s=> set.add(s));
+  }
   return Array.from(set).sort();
 }
 function galeriaArquivosDisponiveis(vendedor, cliente, subpasta){
-  const compartilhado = galeriaClienteCompartilhado(vendedor, cliente);
-  return galeriaMidias.filter(m=> m.cliente===cliente && m.subpasta===subpasta && (compartilhado || m.vendedor===vendedor));
+  return galeriaMidias.filter(m=> m.cliente===cliente && m.subpasta===subpasta && galeriaItemVisivelPraMim(vendedor, cliente, m));
 }
 
 // ============================================================================
@@ -2526,11 +2567,13 @@ function renderGaleria(){
     vazioEl.style.display = nomes.length ? 'none' : 'block';
     wrap.innerHTML = nomes.map(c=>{
       const compartilhado = galeriaClienteCompartilhado(galeriaSelVendedor, c);
-      const qtd = galeriaMidias.filter(m=> m.cliente===c && (compartilhado || m.vendedor===galeriaSelVendedor)).length;
+      const soResponsavel = !compartilhado && !isAdmin() && currentProfile && galeriaSelVendedor===currentProfile.vendedor_nome && pedidosOndeSouResponsavel(c).subpastas.size > 0;
+      const qtd = galeriaMidias.filter(m=> m.cliente===c && galeriaItemVisivelPraMim(galeriaSelVendedor, c, m)).length;
+      const tag = compartilhado ? ' <span class="detail-sub" style="font-size:10px;">(compartilhada)</span>' : (soResponsavel ? ' <span class="detail-sub" style="font-size:10px;">(só o pedido em que você é responsável)</span>' : '');
       return `<div class="galeria-folder">
         <div onclick="galeriaAbrirCliente('${escJs(c)}')" style="cursor:pointer;">
           <span class="icon">🗂️</span>
-          <div class="nome">${c}${compartilhado ? ' <span class="detail-sub" style="font-size:10px;">(compartilhada)</span>' : ''}</div>
+          <div class="nome">${c}${tag}</div>
           <div class="qtd">${qtd} ${qtd===1?'arquivo':'arquivos'}</div>
         </div>
         <div style="margin-top:6px;"><span style="color:var(--erro); cursor:pointer; font-weight:700; font-size:11px;" onclick="event.stopPropagation(); galeriaRemoverPasta('cliente','${escJs(c)}')">remover pasta</span></div>
@@ -2542,9 +2585,8 @@ function renderGaleria(){
     document.getElementById('galeria-nova-pasta-nome').placeholder = 'Nome da pasta (ex: nº do pedido/OC)...';
     const nomes = galeriaSubpastasDisponiveis(galeriaSelVendedor, galeriaSelCliente);
     vazioEl.style.display = nomes.length ? 'none' : 'block';
-    const compartilhadoCliente = galeriaClienteCompartilhado(galeriaSelVendedor, galeriaSelCliente);
     wrap.innerHTML = nomes.map(s=>{
-      const qtd = galeriaMidias.filter(m=> m.cliente===galeriaSelCliente && m.subpasta===s && (compartilhadoCliente || m.vendedor===galeriaSelVendedor)).length;
+      const qtd = galeriaMidias.filter(m=> m.cliente===galeriaSelCliente && m.subpasta===s && galeriaItemVisivelPraMim(galeriaSelVendedor, galeriaSelCliente, m)).length;
       return `<div class="galeria-folder">
         <div onclick="galeriaAbrirSubpasta('${escJs(s)}')" style="cursor:pointer;">
           <span class="icon">📁</span>
@@ -2587,19 +2629,19 @@ async function galeriaCriarPasta(){
 }
 
 async function galeriaRemoverPasta(nivel, nome){
-  // Cliente compartilhado (regra da galeria, Atualização 2026-11-04): remover
-  // aqui remove o que está sendo mostrado na tela — ou seja, se a pasta do
-  // cliente está compartilhada entre vendedoras, remove os arquivos de todas,
-  // não só os meus, pra ficar consistente com o que a própria tela já exibe.
+  // Cliente/pasta compartilhado (regra da galeria, Atualização 2026-11-04,
+  // ajustada 2026-11-06): remover aqui remove o que está sendo mostrado na
+  // tela — ou seja, se a pasta está compartilhada (cliente inteiro, regra
+  // "Vendedor", ou só aquele pedido, regra "Responsável"), remove os
+  // arquivos de quem quer que seja, não só os meus, pra ficar consistente
+  // com o que a própria tela já exibe.
   let matchMidia, matchPasta;
   if(nivel === 'cliente'){
-    const compartilhado = galeriaClienteCompartilhado(galeriaSelVendedor, nome);
-    matchMidia = m=> m.cliente===nome && (compartilhado || m.vendedor===galeriaSelVendedor);
-    matchPasta = pp=> pp.cliente===nome && (compartilhado || pp.vendedor===galeriaSelVendedor);
+    matchMidia = m=> m.cliente===nome && galeriaItemVisivelPraMim(galeriaSelVendedor, nome, m);
+    matchPasta = pp=> pp.cliente===nome && galeriaItemVisivelPraMim(galeriaSelVendedor, nome, pp);
   } else if(nivel === 'subpasta'){
-    const compartilhado = galeriaClienteCompartilhado(galeriaSelVendedor, galeriaSelCliente);
-    matchMidia = m=> m.cliente===galeriaSelCliente && m.subpasta===nome && (compartilhado || m.vendedor===galeriaSelVendedor);
-    matchPasta = pp=> pp.cliente===galeriaSelCliente && pp.subpasta===nome && (compartilhado || pp.vendedor===galeriaSelVendedor);
+    matchMidia = m=> m.cliente===galeriaSelCliente && m.subpasta===nome && galeriaItemVisivelPraMim(galeriaSelVendedor, galeriaSelCliente, m);
+    matchPasta = pp=> pp.cliente===galeriaSelCliente && pp.subpasta===nome && galeriaItemVisivelPraMim(galeriaSelVendedor, galeriaSelCliente, pp);
   } else return;
 
   const arquivosNaPasta = galeriaMidias.filter(matchMidia);
