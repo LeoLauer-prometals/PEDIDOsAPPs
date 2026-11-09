@@ -1315,6 +1315,7 @@
             <option value="venda-tipo">Venda por tipo de venda (discos/fundidos)</option>
             <option value="venda-periodo">Venda por período (com e/ou sem nota)</option>
             <option value="venda-vendedor">Venda por vendedor</option>
+            <option value="itens-em-aberto">Pedidos/Itens em aberto</option>
             <option value="saidas-cliente">Saídas por cliente</option>
             <option value="saidas-nota">Saídas (com e/ou sem nota)</option>
             <option value="comissao-vendedor">Comissão (bônus) por vendedor</option>
@@ -1352,6 +1353,11 @@
           <div class="field" style="align-self:end;">
             <label style="display:flex; align-items:center; gap:6px; margin-bottom:0;">
               <input type="checkbox" id="rel-f-cancelados" style="width:auto;"> Incluir pedidos cancelados
+            </label>
+          </div>
+          <div class="field" style="align-self:end;">
+            <label style="display:flex; align-items:center; gap:6px; margin-bottom:0;">
+              <input type="checkbox" id="rel-f-finalizados" style="width:auto;"> Incluir pedidos finalizados
             </label>
           </div>
         </div>
@@ -7472,14 +7478,30 @@ function linhaItem(p, it){
   const beneficiario = beneficiarioBonus(p);
   const pctBonus = beneficiario ? (parseFloat(String(p.bonusPercent||'').replace(',','.'))||0) : 0;
   const saida = saidaDoItem(p, it);
+  const qtdTotal = parseFloat(String(it.quantidade||'').replace(',','.')) || 0;
+  // Atualização 2026-11-09 (usuário reportou que o relatório "em aberto"
+  // deixou de fora um item com faturamento PARCIAL, e trouxe um item de
+  // pedido já "finalizado"): `situacaoItem` trata o item como resolvido
+  // assim que QUALQUER quantidade é faturada (vira "Aguardando coleta" ou
+  // "Coletado" mesmo faltando faturar o resto — ver limitação documentada
+  // em `pacoteQueCobreItem`/`quantidadeFaturadaItem` acima), então um
+  // relatório que filtra só pela Situação não pega a sobra em aberto de um
+  // item parcialmente faturado. `quantidadeAberta` resolve isso calculando
+  // direto pela quantidade, não pelo rótulo da situação — usada no
+  // relatório "Pedidos/Itens em aberto" abaixo. `finalizado` também entra
+  // aqui (antes só existia nas telas de lista, não nos relatórios) pra dar
+  // pra excluir pedido finalizado de um relatório de "em aberto".
+  const qtdFaturada = quantidadeFaturadaItem(p, it);
+  const qtdAberta = Math.max(0, qtdTotal - qtdFaturada);
   return {
     dbId: p.dbId, pedidoId: p.id,
     tipo: p.tipo || '', tipoLabel: p.tipo==='discos' ? 'Discos' : (p.tipo==='fundidos' ? 'Fundidos' : '-'),
     cliente: p.nomeCliente || '', cnpj: p.cnpj || '',
     numeroOC: p.numeroOC || '', pvInterno: p.proposta || '',
     codigo: it.codigo || '', descricao: it.descricao || '', liga: it.liga || p.liga || '',
-    quantidade: parseFloat(String(it.quantidade||'').replace(',','.')) || 0,
+    quantidade: qtdTotal,
     quantidadeTexto: it.quantidade || '-',
+    quantidadeFaturada: qtdFaturada, quantidadeAberta: qtdAberta,
     pesoTexto: (p.tipo==='fundidos' && it.peso) ? it.peso : '',
     valorKgUnitNum: (p.tipo==='fundidos' && it.valorKgUnit) ? parseValor(it.valorKgUnit) : null,
     vendedor: p.vendedor || '-',
@@ -7492,6 +7514,7 @@ function linhaItem(p, it){
     beneficiario: beneficiario || '', pctBonus,
     valorBonus: beneficiario ? (semIPI * pctBonus / 100) : 0,
     cancelado: !!p.cancelado,
+    finalizado: !!p.finalizado,
     // usados nos relatórios novos da Atualização 3.7 (Emissão de Nota Fiscal /
     // Código dos Itens por Pedido) — não existiam antes por não serem usados
     // em nenhum dos 7 relatórios originais.
@@ -7527,11 +7550,19 @@ function filtrosRelatorioAtuais(){
     // dois continuam disponíveis e funcionam juntos (AND) se usados ao mesmo tempo.
     dataSaidaDe: document.getElementById('rel-f-datasaida-de').value,
     dataSaidaAte: document.getElementById('rel-f-datasaida-ate').value,
-    incluirCancelados: document.getElementById('rel-f-cancelados').checked
+    incluirCancelados: document.getElementById('rel-f-cancelados').checked,
+    // Atualização 2026-11-09: "finalizado" é só um rótulo manual (ver
+    // `finalizarPedido`), não muda a Situação calculada do item — sem este
+    // filtro, um pedido já finalizado continuava aparecendo nos relatórios
+    // com a situação "crua" (ex. "Em produção"), mesmo already fora das
+    // listas normais de "em aberto" do app. Fica de fora por padrão, igual
+    // já acontece com cancelado.
+    incluirFinalizados: document.getElementById('rel-f-finalizados').checked
   };
 }
 function linhaPassaFiltrosComuns(l, f){
   if(l.cancelado && !f.incluirCancelados) return false;
+  if(l.finalizado && !f.incluirFinalizados) return false;
   if(f.tipo && l.tipo !== f.tipo) return false;
   if(f.cliente && !l.cliente.toLowerCase().includes(f.cliente)) return false;
   if(f.vendedor && l.vendedor !== f.vendedor) return false;
@@ -7550,6 +7581,13 @@ function celQtd(l){ return l.quantidadeTexto; }
 function celData(v){ return v ? formatarDataBR(v) : '-'; }
 function celPeso(l){ return l.pesoTexto ? (l.pesoTexto + ' kg') : '-'; }
 function celValorKg(l){ return (l.valorKgUnitNum!=null) ? (celMoeda(l.valorKgUnitNum) + '/kg') : '-'; }
+// Formata um número de quantidade calculado (faturado/em aberto) igual ao
+// padrão usado no resto do app (inteiro sem decimais, fração com vírgula) —
+// usado no relatório "Pedidos/Itens em aberto".
+function celQtdNum(n){
+  const v = Math.round((n||0) * 1000) / 1000;
+  return Number.isInteger(v) ? String(v) : String(v).replace('.',',');
+}
 
 const RELATORIOS = {
   'venda-cliente': {
@@ -7630,6 +7668,38 @@ const RELATORIOS = {
       {label:'Quantidade', get:celQtd},
       {label:'Valor sem IPI', get:l=>celMoeda(l.valorSemIPI), excel:l=>l.valorSemIPI, tot:l=>l.valorSemIPI},
       {label:'Valor com IPI', get:l=>celMoeda(l.valorComIPI), excel:l=>l.valorComIPI, tot:l=>l.valorComIPI},
+      {label:'Situação', get:l=>l.situacao, chip:true}
+    ]
+  },
+  // Atualização 2026-11-09, pedido do usuário (cliente pediu "a relação de
+  // pedidos e itens em aberto" pra conferência, e os relatórios de venda
+  // filtrados por Situação deixavam de fora item com faturamento PARCIAL —
+  // porque a Situação de um item vira "Aguardando coleta"/"Coletado" assim
+  // que QUALQUER parte dele é faturada, mesmo sobrando quantidade — e também
+  // traziam item de pedido já "Finalizado", que esse rótulo não aparecia
+  // nos relatórios antes). Este relatório resolve os dois problemas de uma
+  // vez: usa a quantidade ainda não faturada (`quantidadeAberta`), não a
+  // Situação, pra decidir o que é "em aberto"; e fica de fora automático
+  // pedido cancelado ou finalizado (a não ser que marque as caixinhas pra
+  // incluir).
+  'itens-em-aberto': {
+    nome: 'Pedidos/Itens em aberto',
+    descricao: 'Itens que ainda têm quantidade não faturada — inclui item com faturamento parcial (mostra quanto já saiu e quanto falta). Fora pedido cancelado/finalizado, a não ser que marque pra incluir.',
+    filtroExtra: l=> l.quantidadeAberta > 0.0001,
+    groupBy: l=>l.cliente,
+    ordenar: (a,b)=> a.cliente.localeCompare(b.cliente) || String(a.pedidoId).localeCompare(String(b.pedidoId)),
+    colunas: [
+      {label:'Cliente', get:l=>l.cliente},
+      {label:'Pedido/PV', get:l=> l.pedidoId + (l.pvInterno?(' / '+l.pvInterno):'')},
+      {label:'Nº OC do cliente', get:l=>l.numeroOC || '-'},
+      {label:'Tipo de venda', get:l=>l.tipoLabel},
+      {label:'Código do item', get:l=>l.codigo},
+      {label:'Descrição do item', get:l=>l.descricao},
+      {label:'Quantidade total', get:celQtd},
+      {label:'Já faturado', get:l=>celQtdNum(l.quantidadeFaturada)},
+      {label:'Em aberto', get:l=>celQtdNum(l.quantidadeAberta)},
+      {label:'Data de entrada', get:l=>celData(l.dataEntrada)},
+      {label:'Previsão de entrega', get:l=>l.dataEntrega ? celData(l.dataEntrega) : '-'},
       {label:'Situação', get:l=>l.situacao, chip:true}
     ]
   },
@@ -7784,6 +7854,7 @@ function limparFiltroRelatorios(){
   });
   ['rel-f-cliente','rel-f-pv','rel-f-data-de','rel-f-data-ate','rel-f-datasaida-de','rel-f-datasaida-ate'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('rel-f-cancelados').checked = false;
+  document.getElementById('rel-f-finalizados').checked = false;
   document.getElementById('rel-resumo').textContent = 'Escolha os filtros e clique em "Gerar relatório".';
   document.getElementById('rel-preview-table').innerHTML = '';
   document.getElementById('btn-rel-excel').disabled = true;
