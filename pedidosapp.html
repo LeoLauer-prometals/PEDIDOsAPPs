@@ -6471,7 +6471,11 @@ async function gerarDocumentoSemNota(id){
   doc.text('Entregue:', ML+95, box2Top+10.5);
   doc.text('CNPJ: ' + (p.cnpj || '-'), ML+2, box2Top+15.5);
   doc.text('Pedido / PV interno: ' + (p.proposta || '-'), ML+95, box2Top+15.5);
-  doc.text('Data de saída: ___/___/______', ML+2, box2Top+20.5);
+  // Atualização 2026-11-16, pedido do usuário: no lugar de "Data de saída"
+  // (campo em branco, preenchido à mão), mostrar a data de EMISSÃO do
+  // documento — a mesma `dataDoc` escolhida no formulário e já usada no
+  // cabeçalho ("Data: ...") — já impressa, sem precisar preencher à mão.
+  doc.text('Data de emissão: ' + formatarDataBR(dataDoc), ML+2, box2Top+20.5);
 
   doc.setFont('helvetica','bold'); doc.setFontSize(8);
   doc.text('OC', MR-17.5, box2Top+6, {align:'center'});
@@ -6583,18 +6587,21 @@ async function gerarDocumentoSemNota(id){
     y += cellH;
   }
 
-  // ---- Termo de retirada ----
+  // ---- Assinatura do cliente + data da coleta ----
+  // Atualização 2026-11-16, pedido do usuário: removido o parágrafo "Eu,
+  // ...... portador do CPF..." (declaração de retirada com veículo/placa) —
+  // sobrou só a linha de assinatura, com um campo novo "Data da coleta" ao
+  // lado, em branco pra preencher à mão (mesmo padrão da antiga "Data de
+  // saída" que saiu do lugar dela — ver Caixa 2 acima, agora com a data de
+  // emissão já impressa).
   y += 8;
-  checkBreak(35);
-  doc.setFont('helvetica','normal'); doc.setFontSize(9);
-  const texto = 'Eu, _______________________________, portador do CPF nº __________________ e RG nº ______________, declaro que, na data de ___/___/___, retirei com o veículo ___________ placa ___________, o(s) item(ns) acima na empresa T.M GASTÃO MAQUINAS E EQUIPAMENTOS, localizada na Avenida Jaime Rodrigues Azenha, 1100 — Jardim Industrial Dante — Nova Odessa/SP.';
-  const linhasTexto = doc.splitTextToSize(texto, MR-ML);
-  doc.text(linhasTexto, ML, y);
-  y += linhasTexto.length * 5 + 18;
+  checkBreak(25);
+  y += 20;
   doc.line(ML, y, ML+86, y);
   y += 5;
-  doc.setFontSize(8.5);
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
   doc.text('Assinatura do cliente', ML, y);
+  doc.text('Data da coleta: ___/___/______', ML+100, y);
 
   doc.save(p.id + '_saida_sem_nota_' + docNumero + '.pdf');
 
