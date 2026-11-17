@@ -518,15 +518,6 @@
     width:72px; height:72px; border-radius:50%; object-fit:cover; margin:0 auto 16px;
     border:2px solid var(--accent); display:block;
   }
-  /* sub-abas compactas de Pedidos/Saídas dentro da sidebar — mesma ideia
-     visual do .navgroup-label, só que agrupando 2 navitems relacionados
-     num "bloco" só, com os dois nomes (Com nota / Sem nota) recuados. */
-  .navgroup-box{ margin:0 0 2px; }
-  .navgroup-box .navgroup-title{
-    padding:13px 22px 4px; color:var(--text-muted); font-size:13.5px; font-weight:600; letter-spacing:0.15px;
-  }
-  .navitem.sub{ padding-left:38px; font-size:12.5px; }
-  .navitem.sub.active{ border-radius:0 10px 10px 0; }
   /* tema claro/escuro — Configurações */
   .theme-toggle{display:flex; gap:10px;}
   .theme-btn{
@@ -632,6 +623,42 @@
     .painel-grid{ grid-template-columns:1fr 1fr; }
     .kv{ grid-template-columns:1fr; }
   }
+
+  /* ══════════════════════════════════════════════════════════
+     Versão 5.5 (pedido do usuário: "podemos alterar a barra lateral pra uma
+     barra superior?") — em telas largas, a barra lateral vira uma barra
+     HORIZONTAL no topo. O celular NÃO muda nada (continua com o mesmo menu
+     "gaveta" de sempre, ver @media 860px acima) — só o desktop troca de
+     coluna lateral pra barra em cima, com os mesmos navitems/ids de sempre
+     (nenhuma função de troca de aba precisou mudar).
+     ══════════════════════════════════════════════════════════ */
+  @media (min-width: 861px){
+    .shell{ flex-direction:column; }
+    .sidebar{
+      width:100%; flex-direction:row; flex-wrap:wrap; align-items:center;
+      padding:0 18px; border-right:none; border-bottom:1px solid var(--border);
+      position:sticky; top:0; z-index:40; background:var(--bg2);
+    }
+    .brand{
+      padding:10px 18px 10px 0; margin-bottom:0; border-bottom:none;
+      border-right:1px solid var(--border); margin-right:4px;
+    }
+    .brand-logo{ height:34px; }
+    .navgroup-label{ display:none; }
+    .navitem{
+      padding:10px 14px; border-left:none; border-bottom:3px solid transparent;
+      border-radius:0; margin-right:0; white-space:nowrap;
+    }
+    .navitem.active{
+      border-left:none; border-bottom:3px solid var(--accent); border-radius:0;
+      margin-right:0; background:none;
+    }
+    .user-badge{
+      margin:0 0 0 auto; border-top:none; padding:8px 0 8px 14px;
+      border-left:1px solid var(--border);
+    }
+    .main{ margin:0 auto; }
+  }
 </style>
 </head>
 <body>
@@ -666,20 +693,13 @@
     <div class="navgroup-label">Pedidos</div>
     <div class="navitem" data-tab="vendas">Formulário <span></span></div>
     <div class="navitem active" data-tab="painel">Painel <span class="count" id="count-painel">0</span></div>
-    <!-- Versão 5.3: "Pedidos" e "Pedidos sem nota" viraram um grupo só
-         compacto (pedido do usuário: "deixar as abas mais compactas, tipo:
-         pedidos - com nota e sem nota") — mesmos data-tab de sempre
-         (pedidos/semnota), só a sidebar ficou mais enxuta. -->
-    <div class="navgroup-box">
-      <div class="navgroup-title">Pedidos</div>
-      <div class="navitem sub" data-tab="pedidos">Com nota <span class="count" id="count-pedidos">0</span></div>
-      <div class="navitem sub" data-tab="semnota">Sem nota <span class="count" id="count-semnota">0</span></div>
-    </div>
-    <div class="navgroup-box">
-      <div class="navgroup-title">Saídas</div>
-      <div class="navitem sub" data-tab="saidas">Com nota <span class="count" id="count-saidas">0</span></div>
-      <div class="navitem sub" data-tab="saidas-semnota">Sem nota <span class="count" id="count-saidas-semnota">0</span></div>
-    </div>
+    <!-- Versão 5.4: "Pedidos" e "Pedidos sem nota" viraram uma aba só, com
+         um toggle por dentro (igual ao DISCOS/FUNDIDOS do Cadastro de
+         itens) pra trocar entre "Com nota"/"Sem nota" — pedido do usuário
+         depois de ver a Versão 5.3 (sub-itens na sidebar): "eu tava pensando
+         mais ou menos como é nos itens". Mesma ideia pra "Saídas". -->
+    <div class="navitem" data-tab="pedidos-grupo">Pedidos <span class="count" id="count-pedidos">0</span><span class="count" id="count-semnota">0</span></div>
+    <div class="navitem" data-tab="saidas-grupo">Saídas <span class="count" id="count-saidas">0</span><span class="count" id="count-saidas-semnota">0</span></div>
     <div class="navitem" data-tab="itens-prontos">Itens Prontos <span class="count" id="count-itens-prontos">0</span></div>
     <div class="navitem" data-tab="cancelados">Cancelados <span class="count" id="count-cancelados">0</span></div>
 
@@ -965,8 +985,15 @@
       </div>
     </section>
 
-    <!-- PEDIDOS (ADM) -->
-    <section id="tab-pedidos" style="display:none">
+    <!-- PEDIDOS — Versão 5.4: "Com nota"/"Sem nota" viraram um toggle (igual
+         ao DISCOS/FUNDIDOS do Cadastro de itens) por dentro de uma aba só,
+         em vez de duas abas separadas na sidebar. -->
+    <section id="tab-pedidos-grupo" style="display:none">
+      <div class="tipo-toggle">
+        <div class="tipo-btn active" id="pill-pedidos-comnota" onclick="mudarSubAbaPedidos('pedidos')">Com nota</div>
+        <div class="tipo-btn" id="pill-pedidos-semnota" onclick="mudarSubAbaPedidos('semnota')">Sem nota</div>
+      </div>
+      <div id="subtab-pedidos">
       <h1>Fila de pedidos</h1>
       <div class="subhead">Pedidos lançados pelo formulário, já com itens e valores informados. Ajuste os itens direto no card se precisar.</div>
 
@@ -1041,10 +1068,10 @@
         </table>
         <div class="empty" id="empty-pedidos" style="display:none">Nenhum pedido encontrado.</div>
       </div>
-    </section>
+      </div>
 
-    <!-- PEDIDOS SEM NOTA -->
-    <section id="tab-semnota" style="display:none">
+      <!-- PEDIDOS SEM NOTA -->
+      <div id="subtab-semnota" style="display:none">
       <h1>Pedidos sem nota</h1>
       <div class="subhead">Pedidos marcados no formulário como "Sem NF". Gere o documento de saída sem nota fiscal para o cliente assinar no recebimento.</div>
 
@@ -1118,10 +1145,16 @@
         </table>
         <div class="empty" id="empty-semnota" style="display:none">Nenhum pedido sem nota encontrado.</div>
       </div>
+      </div>
     </section>
 
-    <!-- SAIDAS -->
-    <section id="tab-saidas" style="display:none">
+    <!-- SAIDAS — mesmo toggle Com nota/Sem nota -->
+    <section id="tab-saidas-grupo" style="display:none">
+      <div class="tipo-toggle">
+        <div class="tipo-btn active" id="pill-saidas-comnota" onclick="mudarSubAbaSaidas('saidas')">Com nota</div>
+        <div class="tipo-btn" id="pill-saidas-semnota" onclick="mudarSubAbaSaidas('saidas-semnota')">Sem nota</div>
+      </div>
+      <div id="subtab-saidas">
       <h1>Saídas — nota e coleta</h1>
       <div class="subhead">Controle de coleta para pedidos que já tiveram nota emitida (parcial ou total).</div>
 
@@ -1178,10 +1211,10 @@
         </table>
         <div class="empty" id="empty-saidas" style="display:none">Nenhuma nota emitida ainda.</div>
       </div>
-    </section>
+      </div>
 
-    <!-- SAIDAS SEM NOTA -->
-    <section id="tab-saidas-semnota" style="display:none">
+      <!-- SAIDAS SEM NOTA -->
+      <div id="subtab-saidas-semnota" style="display:none">
       <h1>Saídas sem nota — coleta</h1>
       <div class="subhead">Pedidos sem nota fiscal com documento de saída já gerado, aguardando ou já coletados.</div>
 
@@ -1237,6 +1270,7 @@
           <tbody id="tbl-saidas-semnota"></tbody>
         </table>
         <div class="empty" id="empty-saidas-semnota" style="display:none">Nenhum pedido sem nota pronto pra coleta.</div>
+      </div>
       </div>
     </section>
 
@@ -1566,7 +1600,7 @@
       <div id="cfg-admin-wrap" style="display:none;">
         <div class="panel">
           <h2 class="secao">Criar nova conta</h2>
-          <div class="detail-sub" style="margin-bottom:10px;">Cria o login da pessoa e já define uma senha temporária — avise a ela pra trocar a senha em Configurações assim que entrar. <strong>Importante:</strong> se a confirmação de e-mail estiver ativada no Supabase (Authentication → Sign In / Providers → Email), a pessoa vai precisar clicar no link que chega por e-mail antes de conseguir entrar com essa senha — pra pular essa etapa, desative "Confirm email" nas configurações do Supabase.</div>
+          <div class="detail-sub" style="margin-bottom:10px;">Cria o login da pessoa e já define uma senha temporária, já liberada pra entrar na hora (sem precisar confirmar e-mail) — avise a ela pra trocar a senha em Configurações assim que entrar. <strong>Antes de usar pela 1ª vez:</strong> precisa publicar uma vez a Edge Function "criar-conta" no Supabase — veja o arquivo <code>supabase-function-criar-conta.md</code> com o passo a passo. Sem isso, o botão abaixo vai dar erro.</div>
           <div class="grid2">
             <div class="field"><label>Nome</label><input id="cfg-novo-nome" placeholder="Nome completo"></div>
             <div class="field"><label>E-mail</label><input id="cfg-novo-email" placeholder="email@exemplo.com"></div>
@@ -1585,7 +1619,7 @@
           </div>
           <div class="detail-sub" id="cfg-novo-erro" style="color:var(--erro); margin:8px 0 0;"></div>
           <div class="actions-row" style="margin-top:12px;">
-            <button class="btn small" type="button" onclick="criarContaAdmin()">Criar conta</button>
+            <button class="btn small" type="button" id="cfg-novo-criar-btn" onclick="criarContaAdmin()">Criar conta</button>
           </div>
         </div>
 
@@ -1956,22 +1990,35 @@ async function criarContaAdmin(){
   erroEl.textContent = '';
   if(!nome || !email || !senha){ erroEl.textContent = 'Preencha nome, e-mail e senha temporária.'; return; }
   if(senha.length < 6){ erroEl.textContent = 'A senha temporária precisa ter pelo menos 6 caracteres.'; return; }
-  // Cliente Supabase À PARTE, só pra esse signUp — usar o `sb` principal
-  // trocaria a sessão logada (a do admin) pela do usuário recém-criado.
-  // `persistSession:false` evita até mexer no localStorage.
-  const sbTemp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data, error } = await sbTemp.auth.signUp({ email, password: senha, options: { data: { nome, vendedor_nome: vendedorNome || null } } });
-  if(error){ erroEl.textContent = 'Erro ao criar conta: ' + error.message; return; }
-  if(!data || !data.user){ erroEl.textContent = 'Não foi possível criar a conta.'; return; }
-  // o trigger handle_new_user() já cria o profile (nome/vendedor_nome/email,
-  // papel padrão "vendedor") — se for admin, ajusta o papel em seguida.
-  if(papel === 'admin'){
-    await sb.from('profiles').update({ papel: 'admin' }).eq('id', data.user.id);
+  // Versão 5.5: criar conta direto com auth.signUp() esbarra em "Signups not
+  // allowed for this instance" — o projeto tem o autocadastro público
+  // DESLIGADO de propósito (senão qualquer um com a chave anônima, que é
+  // pública, criaria conta sozinho). A forma certa é uma Edge Function
+  // (`criar-conta`, roda no servidor com a service role key, nunca exposta
+  // aqui no HTML) que usa a API de admin do Supabase — essa não depende do
+  // autocadastro estar ligado, e cria o usuário já confirmado (sem precisar
+  // clicar em link de e-mail). Ver aviso na tela/projeto sobre publicar essa
+  // function uma vez no Supabase antes de usar este botão.
+  const btn = document.getElementById('cfg-novo-criar-btn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Criando...'; }
+  const { data, error } = await sb.functions.invoke('criar-conta', {
+    body: { nome, email, senha, papel, vendedor_nome: vendedorNome || null }
+  });
+  if(btn){ btn.disabled = false; btn.textContent = 'Criar conta'; }
+  if(error){
+    let msg = error.message || 'Erro desconhecido.';
+    try{ const corpo = await error.context.json(); if(corpo && corpo.error) msg = corpo.error; }catch(e){}
+    if(/failed to fetch|FunctionsFetchError/i.test(msg)){
+      msg = 'Não consegui chamar a function "criar-conta" — ela ainda não foi publicada no Supabase (Edge Functions). Veja o arquivo de instruções.';
+    }
+    erroEl.textContent = 'Erro ao criar conta: ' + msg;
+    return;
   }
+  if(data && data.error){ erroEl.textContent = 'Erro ao criar conta: ' + data.error; return; }
   document.getElementById('cfg-novo-nome').value = '';
   document.getElementById('cfg-novo-email').value = '';
   document.getElementById('cfg-novo-senha').value = '';
-  showToast('Conta criada. Avise a pessoa da senha temporária' + (papel==='admin'?'.':' — e peça pra conferir o e-mail de confirmação, se o Supabase exigir.'));
+  showToast('Conta criada — a pessoa já pode entrar direto com a senha temporária, sem precisar confirmar e-mail.');
   await carregarPerfisAdmin();
 }
 
@@ -3476,6 +3523,23 @@ function fecharSidebarMobile(){
   if(!sidebar || !backdrop) return;
   sidebar.classList.remove('open');
   backdrop.classList.remove('show');
+}
+
+// Versão 5.4: toggle "Com nota"/"Sem nota" dentro de "Pedidos" e "Saídas" —
+// mesmo padrão visual do toggle Discos/Fundidos (.tipo-toggle/.tipo-btn),
+// só trocando qual <div> interno aparece (os ids/funções de cada sub-aba
+// continuam os mesmos de sempre, só a sidebar/estrutura em volta mudou).
+function mudarSubAbaPedidos(sub){
+  document.getElementById('subtab-pedidos').style.display = sub==='pedidos' ? '' : 'none';
+  document.getElementById('subtab-semnota').style.display = sub==='semnota' ? '' : 'none';
+  document.getElementById('pill-pedidos-comnota').classList.toggle('active', sub==='pedidos');
+  document.getElementById('pill-pedidos-semnota').classList.toggle('active', sub==='semnota');
+}
+function mudarSubAbaSaidas(sub){
+  document.getElementById('subtab-saidas').style.display = sub==='saidas' ? '' : 'none';
+  document.getElementById('subtab-saidas-semnota').style.display = sub==='saidas-semnota' ? '' : 'none';
+  document.getElementById('pill-saidas-comnota').classList.toggle('active', sub==='saidas');
+  document.getElementById('pill-saidas-semnota').classList.toggle('active', sub==='saidas-semnota');
 }
 
 function setTipo(tipo){
