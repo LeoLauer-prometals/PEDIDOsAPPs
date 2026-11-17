@@ -1650,7 +1650,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════
@@ -2151,68 +2150,52 @@ async function criarContaAdmin(){
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   NOTIFICAÇÃO POR E-MAIL (opcional)
-   Pra receber um e-mail toda vez que um pedido for lançado:
-   1. Crie uma conta grátis em https://www.emailjs.com
-   2. Crie um "Email Service" (ex: conectando seu Gmail) e um
-      "Email Template" usando as variáveis: pedido_id, cliente,
-      representante, proposta, tipo, data, mensagem, to_email, cc_email
-      (a variável "mensagem" já vem pronta, com todo o texto formatado —
-      o conteúdo do template só precisa exibi-la, ver nota abaixo sobre
-      "conteúdo do e-mail (mensagem)")
-   3. Copie os 3 códigos que o EmailJS te dar (Service ID, Template ID,
-      Public Key), cole abaixo e troque "enabled" para true.
-   IMPORTANTE — causa nº1 de "não chegou e-mail": no painel do EmailJS,
-   dentro do Template usado (Settings do template), o campo "To Email"
-   precisa estar configurado como {{to_email}}, e o campo "To CC" como
-   {{cc_email}}. Se esses campos estiverem em branco ou com outro texto,
-   o EmailJS não sabe pra quem mandar, mesmo com o código certo aqui.
-   Pra ver o motivo exato de uma falha, abra o painel do EmailJS e
-   confira a aba "Email History" — ela mostra cada tentativa de envio
-   e o erro retornado. O console do navegador (F12 → Console) também
-   mostra o erro, pois não escondemos mais a falha.
-   Sem isso configurado, o app funciona normalmente — só não envia e-mail.
-
-   CONTEÚDO DO E-MAIL ("mensagem"): pra que o texto do e-mail já saia
-   pronto (saudação + todos os campos do pedido, igual ao card "Dados do
-   pedido" do Formulário), o app monta um único texto formatado (variável
-   "mensagem") e manda pro EmailJS — assim o conteúdo fica versionado e
-   testado aqui no código, em vez de digitado campo a campo no painel do
-   EmailJS. No painel, dentro de "Content" do template, é só ter algo como:
-     <div style="white-space:pre-wrap; font-family:Arial,sans-serif;">{{mensagem}}</div>
-   (o "white-space:pre-wrap" é o que preserva as quebras de linha do texto).
-
-   DESENHO / ORDEM DE COMPRA: entram como um LINK clicável dentro da própria
-   "mensagem" (não como um arquivo de verdade anexado ao e-mail) — o link
-   abre/baixa o arquivo direto do Supabase Storage, válido por 30 dias.
-   Decisão tomada depois de descobrir, ao vivo no painel do EmailJS, que
-   anexo de verdade ("Dynamic Attachments", aba "Attachments" do template)
-   é recurso só do plano pago (a partir de US$ 9/mês, arquivos até 500KB) —
-   a conta atual está no plano grátis, que não tem essa opção habilitada
-   ("Subscription Limitation" ao tentar usar). Link por e-mail não tem
-   custo nem limite de tamanho de arquivo. Se um dia migrar pro plano
-   pago do EmailJS e preferir anexo de verdade, é só avisar.
+   NOTIFICAÇÃO POR E-MAIL (opcional) — Versão 6.2
+   Até a Versão 6.1 isso era feito pelo EmailJS, saindo pelo e-mail pessoal
+   de quem configurou o serviço. Pedido do usuário: usar, no lugar, a mesma
+   caixa de avisos (Outlook/Microsoft 365) que outro sistema da empresa já
+   usa pra mandar e-mail — e do MESMO jeito que esse outro sistema faz: via
+   API do Microsoft Graph (Outlook), não mais EmailJS.
+   O e-mail agora sai de uma Edge Function no Supabase
+   ("enviar-email-outlook" — ver supabase-functions/enviar-email-outlook/
+   index.ts e o passo a passo em supabase-function-enviar-email-outlook.md)
+   que guarda, só no servidor (nunca no HTML, nunca visível no código-fonte
+   do site), as credenciais do aplicativo cadastrado no Azure AD (Tenant ID,
+   Client ID, Client Secret) e a caixa de avisos que manda os e-mails — o
+   app só manda assunto + corpo do e-mail + destinatário(s), igual mandava
+   os campos pro EmailJS antes.
+   Sem a Edge Function publicada (ou com `enabled:false` abaixo), o app
+   funciona normalmente — só não envia e-mail, com um aviso no console.
    ═══════════════════════════════════════════════════════════════ */
 const EMAIL_CONFIG = {
   enabled: true,
-  serviceId: 'service_32s6hkl',
-  templateId: 'template_9sz8cwn',
-  // Notificação de "nova observação interna" (item 5 da atualização) usa um
-  // 2º template do EmailJS, porque as variáveis são diferentes (não tem
-  // proposta/tipo, tem o texto da observação). Pra ativar:
-  // 1. No painel do EmailJS, crie um novo "Email Template" usando as
-  //    variáveis: to_email, pedido_id, cliente, vendedor, observacao.
-  // 2. Copie o Template ID gerado e cole abaixo, em templateIdObsInterna.
-  // Enquanto ficar em branco, essa notificação específica não é enviada
-  // (as outras continuam funcionando normalmente) — um aviso aparece no
-  // console do navegador (F12) lembrando disso.
-  templateIdObsInterna: '',
-  publicKey: 'aj6ErixFDH4K8jNxq',
   destinatario: 'comercial2@prometals.co',
   cc: 'aline.silva@prometals.co'
 };
-if(EMAIL_CONFIG.enabled && window.emailjs){
-  try{ emailjs.init(EMAIL_CONFIG.publicKey); }catch(e){ console.error('EmailJS: falha ao inicializar (public key incorreta?)', e); }
+// Chama a Edge Function "enviar-email-outlook" — função única, reaproveitada
+// tanto pra notificação de "novo pedido" quanto pra "observação interna"
+// (cada uma monta seu próprio assunto/corpo aqui no código, igual já fazia
+// com a variável "mensagem" do EmailJS, só que agora sem precisar de
+// nenhum template configurado em painel nenhum). Falha aqui nunca trava a
+// ação principal (pedido já foi lançado/salvo de qualquer forma) — só
+// registra no console, igual o EmailJS já fazia.
+async function enviarEmailViaOutlook({ to, cc, subject, text }){
+  if(!EMAIL_CONFIG.enabled) return;
+  if(!to){ console.warn('E-mail "' + subject + '": sem destinatário, notificação não enviada.'); return; }
+  try{
+    const { data, error } = await sb.functions.invoke('enviar-email-outlook', {
+      body: { to, cc: cc || null, subject, text }
+    });
+    if(error){
+      console.error('Outlook: falha ao chamar a function "enviar-email-outlook" pra "' + subject + '". Motivo:', error);
+      return;
+    }
+    if(data && data.error){
+      console.error('Outlook: a function recusou o envio de "' + subject + '". Motivo:', data.error);
+      return;
+    }
+    console.log('Outlook: e-mail "' + subject + '" enviado com sucesso.');
+  }catch(e){ console.error('Outlook: erro inesperado ao tentar enviar "' + subject + '".', e); }
 }
 // Monta o texto completo do e-mail de "novo pedido": saudação + todos os
 // campos do card "Dados do pedido" do Formulário, na mesma ordem em que
@@ -2314,7 +2297,6 @@ function montarMensagemNovoPedido(p, desenhosLinks, urlOC, urlDesenhoLegado){
 const EMAIL_ANEXO_VALIDADE_SEGUNDOS = 30 * 24 * 3600; // link do desenho/OC no e-mail vale 30 dias
 async function notificarNovoPedido(p){
   if(!EMAIL_CONFIG.enabled) return;
-  if(!window.emailjs){ console.error('EmailJS: script não carregou (sem internet ou CDN bloqueado). Notificação não enviada.'); return; }
   try{
     // Versão 4.7: desenho por item — resolve um link assinado pra cada
     // arquivo de cada item (pode ter vários); pedidos lançados antes desta
@@ -2326,22 +2308,13 @@ async function notificarNovoPedido(p){
       urlAssinada(p.ordemCompraArquivo && p.ordemCompraArquivo.path, EMAIL_ANEXO_VALIDADE_SEGUNDOS),
       urlAssinada(p.desenhoArquivo && p.desenhoArquivo.path, EMAIL_ANEXO_VALIDADE_SEGUNDOS)
     ]);
-    emailjs.send(EMAIL_CONFIG.serviceId, EMAIL_CONFIG.templateId, {
-      to_email: EMAIL_CONFIG.destinatario,
-      cc_email: EMAIL_CONFIG.cc,
-      pedido_id: p.id,
-      cliente: p.nomeCliente,
-      representante: p.vendedor,
-      proposta: p.proposta,
-      tipo: p.tipo,
-      data: p.dataEntrada,
-      mensagem: montarMensagemNovoPedido(p, desenhosLinks, urlOC, urlDesenhoLegado)
-    }).then(()=>{
-      console.log('EmailJS: notificação de ' + p.id + ' enviada com sucesso.');
-    }).catch((err)=>{
-      console.error('EmailJS: falha ao enviar notificação de ' + p.id + '. Motivo:', err);
+    await enviarEmailViaOutlook({
+      to: EMAIL_CONFIG.destinatario,
+      cc: EMAIL_CONFIG.cc,
+      subject: 'Novo pedido — ' + p.id + ' (' + (p.nomeCliente || '-') + ')',
+      text: montarMensagemNovoPedido(p, desenhosLinks, urlOC, urlDesenhoLegado)
     });
-  }catch(e){ console.error('EmailJS: erro inesperado ao tentar enviar notificação.', e); }
+  }catch(e){ console.error('Outlook: erro inesperado ao montar a notificação de ' + p.id + '.', e); }
 }
 
 // Mapa vendedor -> e-mail de login, pra notificação de observação interna
@@ -2362,25 +2335,15 @@ function emailDoVendedorPedido(p){
   if(p.representanteResponsavel && EMAIL_VENDEDOR[p.representanteResponsavel]) return EMAIL_VENDEDOR[p.representanteResponsavel];
   return null;
 }
-function notificarObsInterna(p, texto){
+async function notificarObsInterna(p, texto){
   if(!EMAIL_CONFIG.enabled) return;
   const destino = emailDoVendedorPedido(p);
   if(!destino){ console.warn('Observação interna de ' + p.id + ': vendedor "' + (p.vendedor||'-') + '" (nem o responsável) não tem e-mail cadastrado — notificação não enviada.'); return; }
-  if(!EMAIL_CONFIG.templateIdObsInterna){ console.warn('Observação interna de ' + p.id + ': configure EMAIL_CONFIG.templateIdObsInterna (2º template no EmailJS) pra ativar esse e-mail.'); return; }
-  if(!window.emailjs){ console.error('EmailJS: script não carregou. Notificação de observação interna não enviada.'); return; }
-  try{
-    emailjs.send(EMAIL_CONFIG.serviceId, EMAIL_CONFIG.templateIdObsInterna, {
-      to_email: destino,
-      pedido_id: p.id,
-      cliente: p.nomeCliente,
-      vendedor: p.vendedor,
-      observacao: texto
-    }).then(()=>{
-      console.log('EmailJS: notificação de observação interna de ' + p.id + ' enviada com sucesso.');
-    }).catch((err)=>{
-      console.error('EmailJS: falha ao enviar notificação de observação interna de ' + p.id + '. Motivo:', err);
-    });
-  }catch(e){ console.error('EmailJS: erro inesperado ao tentar enviar notificação de observação interna.', e); }
+  await enviarEmailViaOutlook({
+    to: destino,
+    subject: 'Observação interna — pedido ' + p.id,
+    text: 'Pedido: ' + p.id + '\nCliente: ' + (p.nomeCliente || '-') + '\nVendedor(a): ' + (p.vendedor || '-') + '\n\nObservação interna:\n' + texto
+  });
 }
 
 // ============================================================================
