@@ -2006,10 +2006,17 @@ async function criarContaAdmin(){
   });
   if(btn){ btn.disabled = false; btn.textContent = 'Criar conta'; }
   if(error){
+    console.error('Erro ao chamar a Edge Function criar-conta:', error);
     let msg = error.message || 'Erro desconhecido.';
-    try{ const corpo = await error.context.json(); if(corpo && corpo.error) msg = corpo.error; }catch(e){}
-    if(/failed to fetch|FunctionsFetchError/i.test(msg)){
-      msg = 'Não consegui chamar a function "criar-conta" — ela ainda não foi publicada no Supabase (Edge Functions). Veja o arquivo de instruções.';
+    let corpoLido = false;
+    try{ const corpo = await error.context.json(); if(corpo && corpo.error){ msg = corpo.error; corpoLido = true; } }catch(e){}
+    // "Failed to send a request to the Edge Function" (FunctionsFetchError) —
+    // o fetch nem completou (sem resposta HTTP pra ler) — normalmente é
+    // function não publicada, nome diferente de "criar-conta", ou "Enforce
+    // JWT verification" ligado na function bloqueando o preflight (CORS)
+    // antes mesmo do código dela rodar. Ver supabase-function-criar-conta.md.
+    if(!corpoLido && /failed to send a request|failed to fetch|functionsfetcherror/i.test(msg)){
+      msg = 'Não consegui chamar a function "criar-conta" no Supabase. Confira: (1) ela aparece como publicada em Edge Functions com esse nome exato; (2) em Edge Functions → criar-conta → Settings, desligue "Enforce JWT verification" (a function já confere por conta própria quem pode chamar); (3) veja o Console do navegador (F12) pra mais detalhes do erro de rede.';
     }
     erroEl.textContent = 'Erro ao criar conta: ' + msg;
     return;
