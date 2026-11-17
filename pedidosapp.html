@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sistema de Pedidos — Prometals</title>
+<script>
+  // Aplica o tema salvo (claro/escuro) antes do resto da página carregar, pra
+  // não "piscar" escuro e depois trocar pra claro. Fica em localStorage
+  // (por aparelho/navegador) — ver também aplicarTema() mais abaixo.
+  try{
+    var temaSalvo = localStorage.getItem('pa_tema');
+    if(temaSalvo === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  }catch(e){}
+</script>
 
 <!-- PWA: instalação como app no celular (Android/Chrome e iPhone/Safari) -->
 <link rel="manifest" href="manifest.json">
@@ -51,6 +60,30 @@
     --radius-lg: 16px;
     --shadow-sm: 0 2px 10px rgba(0,0,0,0.22);
     --shadow-md: 0 10px 28px rgba(0,0,0,0.32);
+  }
+  /* Tema claro — Versão 5.3 ("ideias pro HTML comercial": opção de tema
+     claro/escuro em Configurações). Mesmas variáveis, valores diferentes —
+     nenhum outro CSS do app precisa mudar, porque tudo já usa var(--...).
+     Fica ativo quando <html data-theme="light">, trocado pelo JS
+     (aplicarTema) e lido antes de tudo (ver script no <head>) pra não
+     "piscar" escuro antes de aplicar claro. */
+  :root[data-theme="light"] {
+    --bg: #f3f5f8;
+    --bg2: #ffffff;
+    --bg3: #eef1f6;
+    --accent: #e06a15;
+    --accent-soft: rgba(224,106,21,0.12);
+    --text: #16202c;
+    --text-muted: #5b6b7d;
+    --border: #dbe1ea;
+    --input-bg: #ffffff;
+    --input-border: #cdd6e2;
+    --th-bg: #eef1f6;
+    --hover-bg: #eef3f9;
+    --erro: #dc2626;
+    --ok: #16a34a;
+    --shadow-sm: 0 2px 10px rgba(20,30,45,0.06);
+    --shadow-md: 0 10px 28px rgba(20,30,45,0.10);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -107,6 +140,10 @@
     padding:0 22px 22px 22px; border-bottom:1px solid var(--border); margin-bottom:16px;
   }
   .brand-logo{height:52px; width:auto; display:block;}
+  /* a logo é clara (feita pro fundo escuro) — no tema claro, sem um fundo
+     escuro por trás dela, fica quase invisível; esse "chip" resolve isso
+     sem precisar trocar o arquivo da logo. */
+  :root[data-theme="light"] .brand-logo{ background:#0b1420; border-radius:10px; padding:6px; }
   .login-logo{height:64px; width:auto; display:block; margin:0 auto 16px;}
   /* Ajuste 2026-09-29: "PEDIDOS" e "Versão X.X" empilhados (versão embaixo
      do título), em vez de lado a lado — pedido do usuário. */
@@ -463,6 +500,55 @@
   .user-badge .sair{color:var(--text-muted); cursor:pointer; font-size:11px; text-decoration:underline; background:none; border:none;}
 
   /* ══════════════════════════════════════════════════════════
+     Versão 5.3 — "ideias pro HTML comercial": foto de perfil (canto da
+     tela + tela de "bem-vindo"), abas compactas (Pedidos/Saídas com
+     sub-abas "Com nota"/"Sem nota") e a tela de Configurações.
+     ══════════════════════════════════════════════════════════ */
+  .user-avatar{
+    width:34px; height:34px; border-radius:50%; object-fit:cover; flex-shrink:0;
+    border:1px solid var(--border); background:var(--bg3);
+  }
+  .user-avatar.sm{width:24px; height:24px;}
+  .user-avatar-fallback{
+    width:34px; height:34px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    background:var(--accent-soft); color:var(--accent); font-weight:700; font-size:13px; border:1px solid var(--border);
+  }
+  .user-badge{ align-items:center; }
+  .loading-avatar{
+    width:72px; height:72px; border-radius:50%; object-fit:cover; margin:0 auto 16px;
+    border:2px solid var(--accent); display:block;
+  }
+  /* sub-abas compactas de Pedidos/Saídas dentro da sidebar — mesma ideia
+     visual do .navgroup-label, só que agrupando 2 navitems relacionados
+     num "bloco" só, com os dois nomes (Com nota / Sem nota) recuados. */
+  .navgroup-box{ margin:0 0 2px; }
+  .navgroup-box .navgroup-title{
+    padding:13px 22px 4px; color:var(--text-muted); font-size:13.5px; font-weight:600; letter-spacing:0.15px;
+  }
+  .navitem.sub{ padding-left:38px; font-size:12.5px; }
+  .navitem.sub.active{ border-radius:0 10px 10px 0; }
+  /* tema claro/escuro — Configurações */
+  .theme-toggle{display:flex; gap:10px;}
+  .theme-btn{
+    flex:1; text-align:center; padding:14px; border:1px solid var(--border); border-radius:10px;
+    cursor:pointer; font-size:13px; font-weight:700; color:var(--text-muted); background:var(--bg2);
+  }
+  .theme-btn.active{ border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
+  .foto-perfil-preview{
+    width:84px; height:84px; border-radius:50%; object-fit:cover; border:1px solid var(--border); display:block; margin-bottom:10px;
+  }
+  /* tabela de permissões por perfil — Configurações (admin) */
+  table.perm-tabela{width:100%; border-collapse:collapse; font-size:12.5px;}
+  table.perm-tabela th{text-align:left; padding:8px 10px; background:var(--th-bg); font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.3px;}
+  table.perm-tabela td{padding:8px 10px; border-top:1px solid var(--border); vertical-align:middle;}
+  table.perm-tabela td.perm-check{text-align:center;}
+  table.perm-tabela input[type=checkbox]{width:16px; height:16px; padding:0; cursor:pointer;}
+  .perfil-card{background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:12px;}
+  .perfil-card .perfil-cabecalho{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;}
+  .perfil-card .perfil-nome{font-weight:700; font-size:14px;}
+  .perfil-card .perfil-email{color:var(--text-muted); font-size:12px;}
+
+  /* ══════════════════════════════════════════════════════════
      OTIMIZAÇÃO MOBILE — Versão 4.12 (pedido do usuário: "mal otimizado por
      conta do zoom", "pode mudar o layout para caber"). Antes disso, a tela
      inteira usava um layout de 2 colunas fixas (sidebar de 216px + conteúdo)
@@ -563,7 +649,8 @@
 </div>
 
 <div id="loading-screen" class="loading-screen">
-  <div class="loading-spinner"></div>
+  <img id="loading-avatar-img" class="loading-avatar" style="display:none;" alt="">
+  <div class="loading-spinner" id="loading-spinner"></div>
   <h2 id="loading-titulo">Bem-vindo(a)!</h2>
   <div class="subhead" id="loading-subtitulo">Carregando seus pedidos...</div>
 </div>
@@ -579,10 +666,20 @@
     <div class="navgroup-label">Pedidos</div>
     <div class="navitem" data-tab="vendas">Formulário <span></span></div>
     <div class="navitem active" data-tab="painel">Painel <span class="count" id="count-painel">0</span></div>
-    <div class="navitem" data-tab="pedidos">Pedidos <span class="count" id="count-pedidos">0</span></div>
-    <div class="navitem" data-tab="semnota">Pedidos sem nota <span class="count" id="count-semnota">0</span></div>
-    <div class="navitem" data-tab="saidas">Saídas <span class="count" id="count-saidas">0</span></div>
-    <div class="navitem" data-tab="saidas-semnota">Saídas sem nota <span class="count" id="count-saidas-semnota">0</span></div>
+    <!-- Versão 5.3: "Pedidos" e "Pedidos sem nota" viraram um grupo só
+         compacto (pedido do usuário: "deixar as abas mais compactas, tipo:
+         pedidos - com nota e sem nota") — mesmos data-tab de sempre
+         (pedidos/semnota), só a sidebar ficou mais enxuta. -->
+    <div class="navgroup-box">
+      <div class="navgroup-title">Pedidos</div>
+      <div class="navitem sub" data-tab="pedidos">Com nota <span class="count" id="count-pedidos">0</span></div>
+      <div class="navitem sub" data-tab="semnota">Sem nota <span class="count" id="count-semnota">0</span></div>
+    </div>
+    <div class="navgroup-box">
+      <div class="navgroup-title">Saídas</div>
+      <div class="navitem sub" data-tab="saidas">Com nota <span class="count" id="count-saidas">0</span></div>
+      <div class="navitem sub" data-tab="saidas-semnota">Sem nota <span class="count" id="count-saidas-semnota">0</span></div>
+    </div>
     <div class="navitem" data-tab="itens-prontos">Itens Prontos <span class="count" id="count-itens-prontos">0</span></div>
     <div class="navitem" data-tab="cancelados">Cancelados <span class="count" id="count-cancelados">0</span></div>
 
@@ -595,7 +692,12 @@
 
     <div class="navgroup-label">Galeria</div>
     <div class="navitem" data-tab="galeria">Galeria <span class="count" id="count-galeria">0</span></div>
+
+    <div class="navgroup-label">Minha conta</div>
+    <div class="navitem" data-tab="configuracoes">Configurações <span></span></div>
     <div class="user-badge">
+      <img id="user-avatar-img" class="user-avatar" style="display:none;" alt="">
+      <div class="user-avatar-fallback" id="user-avatar-fallback">-</div>
       <div class="info">
         <div><span id="user-nome">-</span> <span class="papel-tag">- <span id="user-papel">-</span></span></div>
       </div>
@@ -1406,6 +1508,95 @@
       </div>
     </section>
 
+    <!-- Versão 5.3: tela de Configurações — "ideias pro HTML comercial".
+         Meu perfil (nome, senha, foto, tema) pra todo mundo; "Contas e
+         permissões" só aparece pro admin (escondido via CSS .is-admin,
+         igual ao resto do app). -->
+    <section id="tab-configuracoes" style="display:none">
+      <h1>Configurações</h1>
+      <div class="subhead">Seus dados de acesso, aparência do sistema e, se você for admin, as contas e permissões da equipe.</div>
+
+      <div class="panel">
+        <h2 class="secao">Meu perfil</h2>
+        <div class="grid2">
+          <div class="field">
+            <label>Nome (como aparece pro resto da equipe)</label>
+            <input id="cfg-nome" placeholder="Seu nome completo">
+          </div>
+          <div class="field">
+            <label>E-mail de login</label>
+            <input id="cfg-email" disabled>
+          </div>
+        </div>
+        <div class="actions-row" style="margin-top:12px;">
+          <button class="btn small" type="button" onclick="salvarNomePerfil()">Salvar nome</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2 class="secao">Foto de perfil</h2>
+        <div class="detail-sub" style="margin-bottom:10px;">Aparece no canto da barra lateral e na tela de "bem-vindo(a)" ao entrar.</div>
+        <img id="cfg-foto-preview" class="foto-perfil-preview" style="display:none;" alt="">
+        <input type="file" id="cfg-foto-input" accept="image/*">
+        <div class="actions-row" style="margin-top:10px;">
+          <button class="btn small" type="button" onclick="salvarFotoPerfil()">Salvar foto</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2 class="secao">Trocar senha</h2>
+        <div class="grid2">
+          <div class="field"><label>Nova senha</label><input type="password" id="cfg-senha-nova" placeholder="Mínimo 6 caracteres" autocomplete="new-password"></div>
+          <div class="field"><label>Confirmar nova senha</label><input type="password" id="cfg-senha-confirma" autocomplete="new-password"></div>
+        </div>
+        <div class="detail-sub" id="cfg-senha-erro" style="color:var(--erro); margin:8px 0 0;"></div>
+        <div class="actions-row" style="margin-top:12px;">
+          <button class="btn small" type="button" onclick="salvarSenhaPerfil()">Salvar nova senha</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2 class="secao">Aparência</h2>
+        <div class="theme-toggle" id="cfg-theme-toggle">
+          <div class="theme-btn" id="cfg-theme-dark" onclick="aplicarTema('dark')">🌙 Escuro</div>
+          <div class="theme-btn" id="cfg-theme-light" onclick="aplicarTema('light')">☀️ Claro</div>
+        </div>
+      </div>
+
+      <div id="cfg-admin-wrap" style="display:none;">
+        <div class="panel">
+          <h2 class="secao">Criar nova conta</h2>
+          <div class="detail-sub" style="margin-bottom:10px;">Cria o login da pessoa e já define uma senha temporária — avise a ela pra trocar a senha em Configurações assim que entrar. <strong>Importante:</strong> se a confirmação de e-mail estiver ativada no Supabase (Authentication → Sign In / Providers → Email), a pessoa vai precisar clicar no link que chega por e-mail antes de conseguir entrar com essa senha — pra pular essa etapa, desative "Confirm email" nas configurações do Supabase.</div>
+          <div class="grid2">
+            <div class="field"><label>Nome</label><input id="cfg-novo-nome" placeholder="Nome completo"></div>
+            <div class="field"><label>E-mail</label><input id="cfg-novo-email" placeholder="email@exemplo.com"></div>
+            <div class="field">
+              <label>Papel</label>
+              <select id="cfg-novo-papel">
+                <option value="vendedor" selected>Vendedor(a)</option>
+                <option value="admin">Administrativo</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Vendedor(a) vinculado (pra filtros e bônus)</label>
+              <select id="cfg-novo-vendedornome"></select>
+            </div>
+            <div class="field"><label>Senha temporária</label><input id="cfg-novo-senha" placeholder="Mínimo 6 caracteres"></div>
+          </div>
+          <div class="detail-sub" id="cfg-novo-erro" style="color:var(--erro); margin:8px 0 0;"></div>
+          <div class="actions-row" style="margin-top:12px;">
+            <button class="btn small" type="button" onclick="criarContaAdmin()">Criar conta</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2 class="secao">Contas e permissões</h2>
+          <div class="detail-sub" style="margin-bottom:10px;">Por padrão, só o admin pode cancelar pedido, finalizar pedido e remover nota/documento de saída. Marque abaixo pra liberar alguma dessas ações pra uma pessoa específica. "Editar valor de item já lançado" vem liberado pra todo mundo — desmarque pra impedir uma pessoa de mexer no valor de um item depois de lançado.</div>
+          <div id="cfg-perfis-lista"></div>
+        </div>
+      </div>
+    </section>
+
   </div>
 </div>
 
@@ -1440,8 +1631,31 @@ const LOGO_PDF_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPkAAACGCAYA
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } });
 
 let currentUser = null;
-let currentProfile = null; // {id, nome, papel, representante_nome}
+let currentProfile = null; // {id, nome, papel, representante_nome, email, foto_path, permissoes}
 function isAdmin(){ return !!(currentProfile && currentProfile.papel === 'admin'); }
+
+// Versão 5.3 — "ideias pro HTML comercial": controle fino de permissões.
+// Por padrão (permissoes vazio/ausente) ninguém além do admin tem essas
+// ações — o admin libera uma de cada vez, por pessoa, em Configurações.
+// isAdmin() sempre pode tudo, não precisa estar no objeto `permissoes`.
+const PERMISSOES_CATALOGO = [
+  { chave: 'cancelar_pedido', label: 'Cancelar / reativar pedido' },
+  { chave: 'finalizar_pedido', label: 'Finalizar / reabrir pedido' },
+  { chave: 'remover_nota', label: 'Remover nota fiscal / documento de saída sem nota' }
+];
+function temPermissao(chave){
+  if(isAdmin()) return true;
+  return !!(currentProfile && currentProfile.permissoes && currentProfile.permissoes[chave] === true);
+}
+// "Editar valor de item já lançado" é o oposto das outras: vem liberado pra
+// todo mundo (comportamento de sempre) e o admin PODE TIRAR de uma pessoa
+// específica — por isso o padrão é `true` a não ser que esteja explicitamente
+// `false` no perfil.
+function podeEditarValor(){
+  if(isAdmin()) return true;
+  if(!currentProfile || !currentProfile.permissoes) return true;
+  return currentProfile.permissoes.editar_valor !== false;
+}
 
 // Vendedores com login no app / que trabalham pessoalmente — só eles contabilizam bônus.
 const VENDEDORES_BONUS = ['Ranielly', 'Andreza', 'Marcos', 'Aline'];
@@ -1535,6 +1749,10 @@ async function iniciarSessao(user){
   document.getElementById('user-nome').textContent = profile.nome || user.email;
   document.getElementById('user-papel').textContent = profile.papel === 'admin' ? 'Administrativo' : 'Vendedor(a)';
   document.body.classList.toggle('is-admin', isAdmin());
+  await atualizarAvatarUI();
+  aplicarTema(localStorage.getItem('pa_tema') === 'light' ? 'light' : 'dark', true);
+  preencherConfiguracoes();
+  if(isAdmin()) carregarPerfisAdmin();
   try{
     await Promise.all([ loadData(), new Promise(r=> setTimeout(r, 3000)) ]);
   } finally {
@@ -1550,6 +1768,211 @@ async function checarSessaoExistente(){
   if(data && data.session && data.session.user){
     await iniciarSessao(data.session.user);
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CONFIGURAÇÕES — Versão 5.3 ("ideias pro HTML comercial"): perfil
+   (nome/senha/foto/tema), compacto nas abas (feito na sidebar/CSS) e,
+   pro admin, criação de contas e controle fino de permissões.
+   ═══════════════════════════════════════════════════════════════ */
+
+// ---- tema claro/escuro ----
+function aplicarTema(tema, semSalvar){
+  const claro = tema === 'light';
+  document.documentElement.setAttribute('data-theme', claro ? 'light' : 'dark');
+  if(!semSalvar){ try{ localStorage.setItem('pa_tema', claro ? 'light' : 'dark'); }catch(e){} }
+  const bEscuro = document.getElementById('cfg-theme-dark');
+  const bClaro = document.getElementById('cfg-theme-light');
+  if(bEscuro) bEscuro.classList.toggle('active', !claro);
+  if(bClaro) bClaro.classList.toggle('active', claro);
+}
+
+// ---- avatar (canto da sidebar + tela de bem-vindo) ----
+async function atualizarAvatarUI(){
+  const img = document.getElementById('user-avatar-img');
+  const fallback = document.getElementById('user-avatar-fallback');
+  const loadingImg = document.getElementById('loading-avatar-img');
+  const spinner = document.getElementById('loading-spinner');
+  const inicial = ((currentProfile && currentProfile.nome) || (currentUser && currentUser.email) || '?').trim().charAt(0).toUpperCase();
+  let url = null;
+  if(currentProfile && currentProfile.foto_path){
+    url = await urlAssinada(currentProfile.foto_path, 3600);
+  }
+  if(url){
+    if(img){ img.src = url; img.style.display = ''; }
+    if(fallback) fallback.style.display = 'none';
+    if(loadingImg){ loadingImg.src = url; loadingImg.style.display = ''; }
+    if(spinner) spinner.style.display = 'none';
+  } else {
+    if(img){ img.style.display = 'none'; img.src = ''; }
+    if(fallback){ fallback.style.display = ''; fallback.textContent = inicial; }
+    if(loadingImg){ loadingImg.style.display = 'none'; loadingImg.src = ''; }
+    if(spinner) spinner.style.display = '';
+  }
+}
+
+// ---- Meu perfil: nome, foto, senha ----
+function preencherConfiguracoes(){
+  if(!currentProfile) return;
+  const elNome = document.getElementById('cfg-nome');
+  const elEmail = document.getElementById('cfg-email');
+  if(elNome) elNome.value = currentProfile.nome || '';
+  if(elEmail) elEmail.value = currentProfile.email || (currentUser && currentUser.email) || '';
+  const preview = document.getElementById('cfg-foto-preview');
+  if(preview){
+    if(currentProfile.foto_path){
+      urlAssinada(currentProfile.foto_path, 3600).then(url=>{
+        if(url){ preview.src = url; preview.style.display = ''; }
+      });
+    } else {
+      preview.style.display = 'none';
+    }
+  }
+  document.getElementById('cfg-admin-wrap').style.display = isAdmin() ? '' : 'none';
+  const selNovoVendedor = document.getElementById('cfg-novo-vendedornome');
+  if(selNovoVendedor && !selNovoVendedor.options.length) selNovoVendedor.innerHTML = vendedorOptions('');
+}
+async function salvarNomePerfil(){
+  const nome = val('cfg-nome').trim();
+  if(!nome){ showToast('Digite um nome.'); return; }
+  const { error } = await sb.from('profiles').update({ nome }).eq('id', currentUser.id);
+  if(error){ mostrarErroSupabase('Erro ao salvar nome', error); return; }
+  currentProfile.nome = nome;
+  document.getElementById('user-nome').textContent = nome;
+  await atualizarAvatarUI();
+  showToast('Nome atualizado.');
+}
+async function salvarSenhaPerfil(){
+  const nova = val('cfg-senha-nova');
+  const confirma = val('cfg-senha-confirma');
+  const erroEl = document.getElementById('cfg-senha-erro');
+  erroEl.textContent = '';
+  if(!nova || nova.length < 6){ erroEl.textContent = 'A senha precisa ter pelo menos 6 caracteres.'; return; }
+  if(nova !== confirma){ erroEl.textContent = 'As senhas não são iguais.'; return; }
+  const { error } = await sb.auth.updateUser({ password: nova });
+  if(error){ erroEl.textContent = 'Erro ao trocar senha: ' + error.message; return; }
+  document.getElementById('cfg-senha-nova').value = '';
+  document.getElementById('cfg-senha-confirma').value = '';
+  showToast('Senha atualizada com sucesso.');
+}
+async function salvarFotoPerfil(){
+  const input = document.getElementById('cfg-foto-input');
+  const file = input.files && input.files[0];
+  if(!file){ showToast('Escolha uma foto primeiro.'); return; }
+  if(!file.type.startsWith('image/')){ showToast('Escolha um arquivo de imagem.'); return; }
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const caminho = 'perfil/' + currentUser.id + '-' + Date.now() + '.' + ext;
+  const { error: upErr } = await sb.storage.from(ANEXOS_BUCKET).upload(caminho, file, { upsert: false });
+  if(upErr){ mostrarErroSupabase('Erro ao enviar foto', upErr); return; }
+  const fotoAnterior = currentProfile.foto_path;
+  const { error } = await sb.from('profiles').update({ foto_path: caminho }).eq('id', currentUser.id);
+  if(error){ mostrarErroSupabase('Erro ao salvar foto', error); return; }
+  currentProfile.foto_path = caminho;
+  if(fotoAnterior) await sb.storage.from(ANEXOS_BUCKET).remove([fotoAnterior]);
+  input.value = '';
+  await atualizarAvatarUI();
+  preencherConfiguracoes();
+  showToast('Foto de perfil atualizada.');
+}
+
+// ---- admin: contas e permissões ----
+let todosPerfis = [];
+async function carregarPerfisAdmin(){
+  const { data, error } = await sb.from('profiles').select('*').order('nome');
+  if(error){ console.error(error); return; }
+  todosPerfis = data || [];
+  renderPerfisAdmin();
+}
+function renderPerfisAdmin(){
+  const wrap = document.getElementById('cfg-perfis-lista');
+  if(!wrap) return;
+  if(!todosPerfis.length){ wrap.innerHTML = '<div class="empty">Nenhum perfil encontrado.</div>'; return; }
+  wrap.innerHTML = todosPerfis.map(perfil=>{
+    const permissoes = perfil.permissoes || {};
+    const editarValorLigado = permissoes.editar_valor !== false;
+    const linhasPerm = PERMISSOES_CATALOGO.map(p=>`
+      <tr>
+        <td>${escHtml(p.label)}</td>
+        <td class="perm-check"><input type="checkbox" ${permissoes[p.chave]===true?'checked':''} ${perfil.papel==='admin'?'disabled':''} onchange="togglePermissaoPerfil('${perfil.id}', '${p.chave}', this.checked)"></td>
+      </tr>`).join('') + `
+      <tr>
+        <td>Editar valor de item já lançado</td>
+        <td class="perm-check"><input type="checkbox" ${editarValorLigado?'checked':''} ${perfil.papel==='admin'?'disabled':''} onchange="togglePermissaoPerfil('${perfil.id}', 'editar_valor', this.checked)"></td>
+      </tr>`;
+    return `
+    <div class="perfil-card">
+      <div class="perfil-cabecalho">
+        <div>
+          <div class="perfil-nome">${escHtml(perfil.nome || '(sem nome)')} ${perfil.id===currentUser.id?'<span class="cargo-badge">você</span>':''}</div>
+          <div class="perfil-email">${escHtml(perfil.email || '')}</div>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <select onchange="salvarPapelPerfil('${perfil.id}', this.value)" ${perfil.id===currentUser.id?'disabled title="Você não pode alterar seu próprio papel."':''}>
+            <option value="vendedor" ${perfil.papel!=='admin'?'selected':''}>Vendedor(a)</option>
+            <option value="admin" ${perfil.papel==='admin'?'selected':''}>Administrativo</option>
+          </select>
+          <select onchange="salvarVendedorNomePerfil('${perfil.id}', this.value)">
+            ${vendedorOptions(perfil.vendedor_nome || '')}
+          </select>
+        </div>
+      </div>
+      ${perfil.papel==='admin' ? '<div class="detail-sub" style="margin:0;">Administrativo já tem acesso completo — permissões abaixo não se aplicam.</div>' : `
+      <table class="perm-tabela">
+        <thead><tr><th>Ação</th><th style="text-align:center;">Liberado</th></tr></thead>
+        <tbody>${linhasPerm}</tbody>
+      </table>`}
+    </div>`;
+  }).join('');
+}
+async function togglePermissaoPerfil(perfilId, chave, ligado){
+  const perfil = todosPerfis.find(p=>p.id===perfilId);
+  if(!perfil) return;
+  const permissoes = Object.assign({}, perfil.permissoes || {});
+  permissoes[chave] = ligado;
+  const { error } = await sb.from('profiles').update({ permissoes }).eq('id', perfilId);
+  if(error){ mostrarErroSupabase('Erro ao salvar permissão', error); renderPerfisAdmin(); return; }
+  perfil.permissoes = permissoes;
+  if(perfilId === currentUser.id) currentProfile.permissoes = permissoes;
+  showToast('Permissão atualizada.');
+}
+async function salvarPapelPerfil(perfilId, novoPapel){
+  const { error } = await sb.from('profiles').update({ papel: novoPapel }).eq('id', perfilId);
+  if(error){ mostrarErroSupabase('Erro ao alterar papel', error); await carregarPerfisAdmin(); return; }
+  await carregarPerfisAdmin();
+  showToast('Papel atualizado.');
+}
+async function salvarVendedorNomePerfil(perfilId, vendedorNome){
+  const { error } = await sb.from('profiles').update({ vendedor_nome: vendedorNome || null }).eq('id', perfilId);
+  if(error){ mostrarErroSupabase('Erro ao vincular vendedor(a)', error); await carregarPerfisAdmin(); return; }
+  showToast('Vínculo de vendedor(a) atualizado.');
+}
+async function criarContaAdmin(){
+  const nome = val('cfg-novo-nome').trim();
+  const email = val('cfg-novo-email').trim();
+  const papel = val('cfg-novo-papel');
+  const vendedorNome = val('cfg-novo-vendedornome');
+  const senha = val('cfg-novo-senha');
+  const erroEl = document.getElementById('cfg-novo-erro');
+  erroEl.textContent = '';
+  if(!nome || !email || !senha){ erroEl.textContent = 'Preencha nome, e-mail e senha temporária.'; return; }
+  if(senha.length < 6){ erroEl.textContent = 'A senha temporária precisa ter pelo menos 6 caracteres.'; return; }
+  // Cliente Supabase À PARTE, só pra esse signUp — usar o `sb` principal
+  // trocaria a sessão logada (a do admin) pela do usuário recém-criado.
+  // `persistSession:false` evita até mexer no localStorage.
+  const sbTemp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data, error } = await sbTemp.auth.signUp({ email, password: senha, options: { data: { nome, vendedor_nome: vendedorNome || null } } });
+  if(error){ erroEl.textContent = 'Erro ao criar conta: ' + error.message; return; }
+  if(!data || !data.user){ erroEl.textContent = 'Não foi possível criar a conta.'; return; }
+  // o trigger handle_new_user() já cria o profile (nome/vendedor_nome/email,
+  // papel padrão "vendedor") — se for admin, ajusta o papel em seguida.
+  if(papel === 'admin'){
+    await sb.from('profiles').update({ papel: 'admin' }).eq('id', data.user.id);
+  }
+  document.getElementById('cfg-novo-nome').value = '';
+  document.getElementById('cfg-novo-email').value = '';
+  document.getElementById('cfg-novo-senha').value = '';
+  showToast('Conta criada. Avise a pessoa da senha temporária' + (papel==='admin'?'.':' — e peça pra conferir o e-mail de confirmação, se o Supabase exigir.'));
+  await carregarPerfisAdmin();
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -3030,6 +3453,7 @@ document.querySelectorAll('.navitem').forEach(el=>{
     el.classList.add('active');
     document.querySelectorAll('.main > section').forEach(s=>s.style.display='none');
     document.getElementById('tab-'+el.dataset.tab).style.display='block';
+    if(el.dataset.tab === 'configuracoes'){ preencherConfiguracoes(); if(isAdmin()) carregarPerfisAdmin(); }
     fecharSidebarMobile();
   });
 });
@@ -4569,7 +4993,7 @@ function render(){
       <td>${formatBRL(pedidoValorComIPI(p))}</td>
       <td>${p.canceladoEm ? new Date(p.canceladoEm).toLocaleString('pt-BR') : '-'}</td>
       <td>${p.motivoCancelamento||'-'}</td>
-      <td>${isAdmin() ? `<button type="button" class="btn small secondary" onclick="event.stopPropagation(); reativarPedido('${p.id}')">Reabrir</button>` : ''} ${celulaExcluirRapido(p)}</td>
+      <td>${temPermissao('cancelar_pedido') ? `<button type="button" class="btn small secondary" onclick="event.stopPropagation(); reativarPedido('${p.id}')">Reabrir</button>` : ''} ${celulaExcluirRapido(p)}</td>
     `;
     tblCanc.appendChild(tr);
   });
@@ -5125,7 +5549,7 @@ function openDetail(id){
       <span class="chip ${n.coletaStatus==='coletada'?'total':'pendente'}">${n.coletaStatus==='coletada' ? ('coletado '+formatarDataBR(n.coletaData)) : 'aguardando coleta'}</span>
       ${(()=>{ const qtd = (n.midias?.length||0) + (n.fotoPath?1:0); return qtd ? `<button type="button" class="btn small secondary" onclick="abrirFotoNota('${p.id}', ${i})">Ver ${qtd>1?qtd+' arquivos':'arquivo'}</button>` : ''; })()}
       ${isAdmin() ? `<span class="x" style="color:var(--accent);" onclick="editarNota('${p.id}', ${i})">editar</span>` : ''}
-      ${isAdmin() ? `<span class="x" onclick="removerNota('${p.id}', ${i})">remover</span>` : ''}
+      ${temPermissao('remover_nota') ? `<span class="x" onclick="removerNota('${p.id}', ${i})">remover</span>` : ''}
       ${(n.itens&&n.itens.length) ? `<div style="width:100%; margin:4px 0 0; display:flex; flex-wrap:wrap; gap:6px;">${n.itens.map((it,ii)=>{ const qtdIt = (it.midias?.length||0) + (it.fotoPath?1:0); return `<span class="chip item">${it.codigo||'-'} · qtd ${it.quantidade||'-'} · ${formatBRL(parseValor(it.valor))}${qtdIt ? ` · <span class="x" style="color:var(--accent);" onclick="abrirMidiasItemNota('${p.id}', ${i}, ${ii})">ver ${qtdIt>1?qtdIt+' arquivos':'arquivo'}</span>` : ''}</span>`; }).join('')}</div>` : ''}
     </div>
   `).join('') || '<div class="detail-sub" style="margin:0;">Nenhuma nota registrada ainda.</div>';
@@ -5139,7 +5563,7 @@ function openDetail(id){
       <span>${formatBRL(valorDocumentoSemNota(d))}</span>
       <span>${d.data||'-'}</span>
       ${d.pdfPath ? `<button type="button" class="btn small secondary" style="margin-left:auto;" onclick="visualizarDocSemNota('${p.id}', ${di})">Visualizar</button>` : ''}
-      ${isAdmin() ? `<span class="x" onclick="removerDocumentoSemNota('${p.id}', ${di})">remover</span>` : ''}
+      ${temPermissao('remover_nota') ? `<span class="x" onclick="removerDocumentoSemNota('${p.id}', ${di})">remover</span>` : ''}
     </div>`;
   }).join('') || '<div class="detail-sub" style="margin:0;">Nenhum documento gerado ainda.</div>';
 
@@ -5231,7 +5655,7 @@ function openDetail(id){
   const avisoCancelado = p.cancelado ? `
     <div class="aviso-cancelado">
       <span>🚫 Este pedido está cancelado — não conta como venda nem entra nos totais.</span>
-      ${isAdmin() ? `<button class="btn small" onclick="reativarPedido('${p.id}')">Reativar pedido</button>` : ''}
+      ${temPermissao('cancelar_pedido') ? `<button class="btn small" onclick="reativarPedido('${p.id}')">Reativar pedido</button>` : ''}
     </div>
   ` : '';
 
@@ -5241,7 +5665,7 @@ function openDetail(id){
   const avisoFinalizado = (p.finalizado && !p.cancelado) ? `
     <div class="aviso-finalizado">
       <span>✅ Este pedido está marcado como finalizado${p.finalizadoEm ? (' em ' + new Date(p.finalizadoEm).toLocaleDateString('pt-BR')) : ''}.</span>
-      ${isAdmin() ? `<button class="btn small" onclick="reabrirPedidoFinalizado('${p.id}')">Reabrir pedido</button>` : ''}
+      ${temPermissao('finalizar_pedido') ? `<button class="btn small" onclick="reabrirPedidoFinalizado('${p.id}')">Reabrir pedido</button>` : ''}
     </div>
   ` : '';
 
@@ -5324,17 +5748,18 @@ function openDetail(id){
       <div class="detail-tab-panel ${abaDetalheAtual==='itens'?'active':''}" data-tabpanel="itens">
         <div class="panel" style="margin-bottom:14px;">
           <h2 class="secao">Itens do pedido</h2>
+          ${(()=>{ var valorTravado = !!itemEmEdicao && !podeEditarValor(); window.__valorTravadoAtual = valorTravado; return ''; })()}
           ${p.tipo === 'fundidos' ? `
           <div class="field" style="margin-bottom:10px; max-width:320px;">
             <label>Precificação do item</label>
-            <select id="d-item-precificacao" onchange="atualizarPrecificacaoItemPedido()">
+            <select id="d-item-precificacao" onchange="atualizarPrecificacaoItemPedido()" ${window.__valorTravadoAtual?'disabled':''}>
               <option value="peca" ${itemEmEdicaoPorKg?'':'selected'}>Por peça (valor direto)</option>
               <option value="kg" ${itemEmEdicaoPorKg?'selected':''}>Por KG (peso × valor do kg)</option>
             </select>
           </div>
           <div class="nota-grid" id="d-item-kg-grid" style="display:${itemEmEdicaoPorKg ? '' : 'none'}; margin-bottom:10px;">
-            <div class="field"><label>Peso unitário (kg)</label><input id="d-item-peso" placeholder="ex: 12,5" value="${itemEmEdicao?.peso||''}" oninput="calcularValorItemPorKgPedido()"></div>
-            <div class="field"><label>Valor do KG</label><input id="d-item-valorkgunit" placeholder="R$" value="${itemEmEdicao?.valorKgUnit||''}" oninput="formatarMoedaInput(this); calcularValorItemPorKgPedido()"></div>
+            <div class="field"><label>Peso unitário (kg)</label><input id="d-item-peso" placeholder="ex: 12,5" value="${itemEmEdicao?.peso||''}" oninput="calcularValorItemPorKgPedido()" ${window.__valorTravadoAtual?'disabled':''}></div>
+            <div class="field"><label>Valor do KG</label><input id="d-item-valorkgunit" placeholder="R$" value="${itemEmEdicao?.valorKgUnit||''}" oninput="formatarMoedaInput(this); calcularValorItemPorKgPedido()" ${window.__valorTravadoAtual?'disabled':''}></div>
             <div class="field"><label>Valor calculado (sem IPI)</label><input id="d-item-valorcalculado" disabled></div>
           </div>
           ` : ''}
@@ -5344,8 +5769,9 @@ function openDetail(id){
                sozinho multiplicando pela quantidade. -->
           <div class="field" id="d-item-peca-grid" style="${(p.tipo==='fundidos' && itemEmEdicaoPorKg) ? 'display:none;' : ''} margin-bottom:10px; max-width:320px;">
             <label>Valor unitário (de 1 peça, sem IPI)</label>
-            <input id="d-item-valorunit" placeholder="R$" value="${itemEmEdicaoValorUnit}" oninput="formatarMoedaInput(this); calcularValorItemPorKgPedido();">
+            <input id="d-item-valorunit" placeholder="R$" value="${itemEmEdicaoValorUnit}" oninput="formatarMoedaInput(this); calcularValorItemPorKgPedido();" ${window.__valorTravadoAtual?'disabled':''}>
           </div>
+          ${window.__valorTravadoAtual ? '<div class="detail-sub" style="margin:-6px 0 10px; color:var(--erro);">Você não tem permissão para alterar o valor deste item — fale com o admin.</div>' : ''}
           ${itemEmEdicao ? `<div class="detail-sub" style="margin-bottom:8px; color:var(--accent); font-weight:700;">Editando o item ${itemEmEdicao.codigo||'-'} — ajuste os campos abaixo e clique em "Salvar edição". <span class="x" style="color:var(--text-muted);" onclick="cancelarEdicaoItemPedido('${p.id}')">cancelar edição</span></div>` : ''}
           <div class="nota-grid">
             <div class="field field-busca"><label>Código do item <span id="d-item-engenharia-status" class="detail-sub" style="font-weight:400;"></span></label><input id="d-item-codigo" value="${itemEmEdicao?.codigo||''}" autocomplete="off"><div class="busca-dropdown" id="d-item-codigo-dropdown"></div></div>
@@ -5516,10 +5942,10 @@ function openDetail(id){
       <div class="actions-row">
         <button class="btn" id="btn-salvar-detalhe" onclick="salvarDetalhe('${p.id}')">Salvar</button>
         <button class="btn secondary" onclick="duplicarPedido('${p.id}')">Duplicar pedido</button>
-        ${(!p.cancelado && isAdmin()) ? `<button class="btn secondary" style="color:#f87171; border-color:#f87171;" onclick="mostrarConfirmCancelar()">Cancelar pedido</button>` : ''}
-        ${(!p.cancelado && !p.finalizado && isAdmin()) ? `<button class="btn secondary" style="color:#a5b4fc; border-color:#a5b4fc;" onclick="finalizarPedido('${p.id}')">Finalizar pedido</button>` : ''}
+        ${(!p.cancelado && temPermissao('cancelar_pedido')) ? `<button class="btn secondary" style="color:#f87171; border-color:#f87171;" onclick="mostrarConfirmCancelar()">Cancelar pedido</button>` : ''}
+        ${(!p.cancelado && !p.finalizado && temPermissao('finalizar_pedido')) ? `<button class="btn secondary" style="color:#a5b4fc; border-color:#a5b4fc;" onclick="finalizarPedido('${p.id}')">Finalizar pedido</button>` : ''}
       </div>
-      ${(!p.cancelado && isAdmin()) ? `
+      ${(!p.cancelado && temPermissao('cancelar_pedido')) ? `
       <div class="confirm-inline" id="d-confirm-cancelar" style="display:none;">
         <span>Tem certeza que quer cancelar ${p.id}? Ele deixa de contar como venda e vai pra aba "Cancelados".</span>
         <input type="text" id="d-motivoCancelamento" placeholder="Motivo do cancelamento (opcional)" style="min-width:220px;">
@@ -5621,6 +6047,15 @@ async function finalizarAdicionarItemPedido(id){
     ...itemEngenhariaParaPayload(engenharia),
     desenho_arquivos: itemDesenhoExistentes['d-item'].slice()
   };
+  // Versão 5.3: quem não tem a permissão "editar_valor" não pode mudar o
+  // valor de um item JÁ lançado — os campos já ficam desabilitados na tela
+  // (ver render acima), isso aqui é só reforço contra alguém forçar o campo
+  // pelo devtools: ignora o que foi digitado e mantém o valor original.
+  if(itemEmEdicao && !podeEditarValor()){
+    item.valor_sem_ipi = parseValor(itemEmEdicao.valorSemIPI);
+    item.peso = itemEmEdicao.peso || null;
+    item.valor_kg_unit = itemEmEdicao.valorKgUnit || null;
+  }
   if(itemEmEdicao){
     // fotos de desenvolvimento novas (se houver) só podem ser enviadas
     // depois — o item já tem id, então sobem direto pra pasta dele e o
@@ -6262,6 +6697,7 @@ async function desfazerColetaDocumentoSemNota(id, idx){
   render();
 }
 async function removerNota(id, idx){
+  if(!temPermissao('remover_nota')){ showToast('Você não tem permissão para remover nota fiscal.'); return; }
   const p = pedidos.find(x=>x.id===id);
   const nota = p.notas[idx];
   const { error } = await sb.from('notas').delete().eq('id', nota.dbId);
@@ -6651,6 +7087,7 @@ async function gerarDocumentoSemNota(id){
 // se tiver) — mesmo padrão já usado em `removerNota`, pra manter consistência
 // entre os dois jeitos de faturar.
 async function removerDocumentoSemNota(id, idx){
+  if(!temPermissao('remover_nota')){ showToast('Você não tem permissão para remover documento de saída.'); return; }
   const p = pedidos.find(x=>x.id===id);
   const doc = p && p.documentosSemNota && p.documentosSemNota[idx];
   if(!doc) return;
@@ -6907,6 +7344,7 @@ function esconderConfirmCancelar(){
   if(el) el.style.display = 'none';
 }
 async function confirmarCancelarPedido(id){
+  if(!temPermissao('cancelar_pedido')){ showToast('Você não tem permissão para cancelar pedido.'); return; }
   const p = pedidos.find(x=>x.id===id);
   if(!p) return;
   const motivo = val('d-motivoCancelamento');
@@ -6919,6 +7357,7 @@ async function confirmarCancelarPedido(id){
   render();
 }
 async function reativarPedido(id){
+  if(!temPermissao('cancelar_pedido')){ showToast('Você não tem permissão para reativar pedido.'); return; }
   const p = pedidos.find(x=>x.id===id);
   if(!p) return;
   const { error } = await sb.from('pedidos').update({ cancelado: false, cancelado_em: null, motivo_cancelamento: null }).eq('id', p.dbId);
@@ -6933,7 +7372,7 @@ async function reativarPedido(id){
 // Não afeta cancelado/produção/faturamento nem nenhum total — é só uma
 // etiqueta visual por cima do status normal.
 async function finalizarPedido(id){
-  if(!isAdmin()){ showToast('Só admin pode finalizar pedido.'); return; }
+  if(!temPermissao('finalizar_pedido')){ showToast('Você não tem permissão para finalizar pedido.'); return; }
   const p = pedidos.find(x=>x.id===id);
   if(!p) return;
   const { error } = await sb.from('pedidos').update({ finalizado: true, finalizado_em: new Date().toISOString() }).eq('id', p.dbId);
@@ -6945,7 +7384,7 @@ async function finalizarPedido(id){
   render();
 }
 async function reabrirPedidoFinalizado(id){
-  if(!isAdmin()){ showToast('Só admin pode reabrir pedido.'); return; }
+  if(!temPermissao('finalizar_pedido')){ showToast('Você não tem permissão para reabrir pedido.'); return; }
   const p = pedidos.find(x=>x.id===id);
   if(!p) return;
   const { error } = await sb.from('pedidos').update({ finalizado: false, finalizado_em: null }).eq('id', p.dbId);
