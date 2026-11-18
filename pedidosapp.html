@@ -57,9 +57,29 @@
     --erro: #ef4444;
     --ok: #22c55e;
     --radius: 12px;
-    --radius-lg: 16px;
+    --radius-lg: 14px;
     --shadow-sm: 0 2px 10px rgba(0,0,0,0.22);
     --shadow-md: 0 10px 28px rgba(0,0,0,0.32);
+    /* Borda dos cards (.panel/.kpi-card/.painel-card/.filtro-panel) — no tema
+       escuro continua uma borda de verdade (ajuda a separar card de fundo
+       quando os dois já são escuros); no tema claro vira quase invisível,
+       porque ali quem separa o card do fundo é a sombra (ver --shadow-sm/md
+       mais abaixo), igual ao print de referência (cards "flutuando", sem
+       contorno). */
+    --panel-border: var(--border);
+    /* Barra lateral — Versão 6.3 ("reskin"): pedido do usuário pra deixar o
+       visual parecido com o outro sistema interno da empresa (print
+       enviado), que tem a barra lateral sempre escura, mesmo quando o
+       conteúdo principal está no tema claro. Por isso esses tokens NÃO são
+       redefinidos dentro de :root[data-theme="light"] mais abaixo — ficam
+       fixos nos dois temas, só o conteúdo principal (var(--bg) etc.) muda. */
+    --sidebar-bg: #0d1520;
+    --sidebar-border: #1c2a3b;
+    --sidebar-text: #e8edf3;
+    --sidebar-muted: #7c8fa3;
+    --sidebar-hover-bg: rgba(255,255,255,0.045);
+    --sidebar-active-bg: rgba(240,122,31,0.16);
+    --sidebar-accent: #f07a1f;
   }
   /* Tema claro — Versão 5.3 ("ideias pro HTML comercial": opção de tema
      claro/escuro em Configurações). Mesmas variáveis, valores diferentes —
@@ -82,8 +102,9 @@
     --hover-bg: #eef3f9;
     --erro: #dc2626;
     --ok: #16a34a;
-    --shadow-sm: 0 2px 10px rgba(20,30,45,0.06);
-    --shadow-md: 0 10px 28px rgba(20,30,45,0.10);
+    --shadow-sm: 0 1px 2px rgba(20,30,45,0.04), 0 4px 14px rgba(20,30,45,0.07);
+    --shadow-md: 0 4px 10px rgba(20,30,45,0.06), 0 16px 32px rgba(20,30,45,0.11);
+    --panel-border: rgba(20,30,45,0.05);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -131,39 +152,39 @@
   .shell.shell-hidden{display:none;}
   .sidebar{
     width:216px; flex-shrink:0;
-    background:var(--bg2);
-    border-right:1px solid var(--border);
+    background:var(--sidebar-bg);
+    border-right:1px solid var(--sidebar-border);
     padding:26px 0; display:flex; flex-direction:column;
   }
   .brand{
     display:flex; align-items:center; gap:11px;
-    padding:0 22px 22px 22px; border-bottom:1px solid var(--border); margin-bottom:16px;
+    padding:0 22px 22px 22px; border-bottom:1px solid var(--sidebar-border); margin-bottom:16px;
   }
   .brand-logo{height:52px; width:auto; display:block;}
-  /* a logo é clara (feita pro fundo escuro) — no tema claro, sem um fundo
-     escuro por trás dela, fica quase invisível; esse "chip" resolve isso
-     sem precisar trocar o arquivo da logo. */
-  :root[data-theme="light"] .brand-logo{ background:#0b1420; border-radius:10px; padding:6px; }
+  /* Versão 6.3: a barra lateral agora é sempre escura (nos dois temas), então
+     a logo (clara, feita pro fundo escuro) já fica legível sem precisar de
+     nenhum "chip" de fundo por trás dela — o ajuste que existia aqui só pro
+     tema claro foi removido por não ser mais necessário. */
   .login-logo{height:64px; width:auto; display:block; margin:0 auto 16px;}
   /* Ajuste 2026-09-29: "PEDIDOS" e "Versão X.X" empilhados (versão embaixo
      do título), em vez de lado a lado — pedido do usuário. */
   .brand-textwrap{display:flex; flex-direction:column;}
-  .brand-text{font-weight:700; font-size:15px; color:var(--text); letter-spacing:0.3px;}
-  .brand-text span{color:var(--accent);}
-  .brand-version{display:block; font-size:10px; font-weight:600; color:var(--text-muted); letter-spacing:0.4px; margin-top:2px;}
+  .brand-text{font-weight:700; font-size:15px; color:var(--sidebar-text); letter-spacing:0.3px;}
+  .brand-text span{color:var(--sidebar-accent);}
+  .brand-version{display:block; font-size:10px; font-weight:600; color:var(--sidebar-muted); letter-spacing:0.4px; margin-top:2px;}
   .topbar{
     display:flex; justify-content:flex-end; align-items:center;
     margin-bottom:20px; color:var(--text-muted); font-size:12.5px; font-weight:600;
   }
   .navitem{
-    padding:13px 22px; cursor:pointer; color:var(--text-muted); font-size:13.5px; font-weight:600;
+    padding:13px 22px; cursor:pointer; color:var(--sidebar-muted); font-size:13.5px; font-weight:600;
     letter-spacing:0.15px;
     border-left:3px solid transparent; display:flex; justify-content:space-between; align-items:center;
     transition: color .15s, background .15s;
   }
-  .navitem:hover{color:var(--text); background:rgba(255,255,255,0.02);}
+  .navitem:hover{color:var(--sidebar-text); background:var(--sidebar-hover-bg);}
   .navitem.active{
-    color:var(--accent); border-left:3px solid var(--accent); background:var(--accent-soft);
+    color:var(--sidebar-accent); border-left:3px solid var(--sidebar-accent); background:var(--sidebar-active-bg);
     border-radius:0 10px 10px 0; margin-right:12px;
   }
   .navitem .count{
@@ -177,7 +198,7 @@
   h1{font-size:22px; font-weight:800; margin:0 0 5px 0; color:var(--text); letter-spacing:-0.2px;}
   .subhead{color:var(--text-muted); font-size:13px; margin-bottom:26px; line-height:1.5;}
   .panel{
-    background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg);
+    background:var(--bg2); border:1px solid var(--panel-border); border-radius:var(--radius-lg);
     padding:22px 26px; margin-bottom:22px; box-shadow:var(--shadow-sm);
   }
   .grid2{display:grid; grid-template-columns:1fr 1fr; gap:18px 22px;}
@@ -246,7 +267,12 @@
   table.itens-subtable td{padding:9px 12px; font-size:12.5px;}
   table.itens-subtable tr:last-child td{border-bottom:none;}
   .pedido-id{color:var(--accent); font-weight:700; font-size:12.5px;}
-  .chip { display:inline-block; background:#1e3a5f; color:#60a5fa; border-radius:20px; padding:4px 12px; font-size:10.5px; font-weight:700; letter-spacing:0.2px; }
+  /* Versão 6.3: o "pill" de status ganhou uma bolinha (::before) na frente,
+     igual ao selo "Prazo vencido" do print de referência — sem precisar
+     mexer em nenhum HTML, é só um detalhe em CSS por cima do chip que já
+     existia. */
+  .chip { display:inline-flex; align-items:center; gap:6px; background:#1e3a5f; color:#60a5fa; border-radius:20px; padding:4px 12px 4px 10px; font-size:10.5px; font-weight:700; letter-spacing:0.2px; }
+  .chip::before{content:''; width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0;}
   .chip.novo{background:#1e3a5f; color:#60a5fa;}
   .chip.producao{background:#704010; color:#fbbf24;}
   .chip.parcial{background:#5b3a1d; color:#fca86a;}
@@ -254,14 +280,15 @@
   .chip.pendente{background:#334155; color:var(--text-muted);}
   .chip.cancelado{background:#4a1d1d; color:#f87171;}
   .chip.finalizado{background:#312e5e; color:#a5b4fc;}
-  .chip.item{background:#334155; color:var(--text); font-weight:700; border-radius:8px;}
+  .chip.item{background:#334155; color:var(--text); font-weight:700; border-radius:8px; padding:4px 12px;}
+  .chip.item::before{display:none;}
   /* "9/65" ao lado do chip de status do item, quando só uma fração da
      quantidade do item já foi faturada — sem isso, "Coletado"/"Aguardando
      coleta" sozinho dá a entender que a quantidade INTEIRA do item já saiu. */
   .qtd-parcial{display:inline-block; font-size:10.5px; font-weight:700; color:var(--text-muted); border:1px solid var(--border); border-radius:10px; padding:2px 8px; margin-left:3px;}
   .cargo-badge{
-    background:var(--bg); border:1px solid var(--accent); color:var(--accent);
-    border-radius:6px; padding:3px 10px; font-size:10px; text-transform:uppercase; font-weight:700; letter-spacing:0.3px;
+    background:var(--accent-soft); border:1px solid transparent; color:var(--accent);
+    border-radius:20px; padding:3px 11px; font-size:10px; text-transform:uppercase; font-weight:700; letter-spacing:0.3px;
   }
   .note-flag{color:var(--erro); font-size:11px; font-weight:700;}
   .empty{color:var(--text-muted); font-size:13px; padding:36px 0; text-align:center;}
@@ -280,7 +307,7 @@
     padding:1px 7px; line-height:1.5; display:none;
   }
   .filtro-panel{
-    display:none; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg);
+    display:none; background:var(--bg2); border:1px solid var(--panel-border); border-radius:var(--radius-lg);
     padding:18px 20px; margin-bottom:18px; box-shadow:var(--shadow-sm);
   }
   .filtro-panel.open{display:block;}
@@ -289,7 +316,7 @@
   .filtro-actions{margin-top:16px; display:flex; justify-content:flex-end;}
   @media (max-width: 980px){ .filtro-grid{grid-template-columns:repeat(2,1fr);} }
   .kpis{display:flex; gap:16px; margin-bottom:22px; flex-wrap:wrap;}
-  .kpi-card{ background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px 20px; min-width:320px; flex:1; box-shadow:var(--shadow-sm); }
+  .kpi-card{ background:var(--bg2); border:1px solid var(--panel-border); border-radius:var(--radius-lg); padding:18px 20px; min-width:320px; flex:1; box-shadow:var(--shadow-sm); }
   .kpi-card .label{font-size:11px; color:var(--text-muted); margin-bottom:7px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700;}
   .kpi-card .valor{font-size:25px; font-weight:800; color:var(--accent); line-height:1;}
   .kpi-card select{margin-top:12px; width:100%;}
@@ -300,18 +327,31 @@
   .rep-table td.subtot{font-weight:700; color:var(--text); background:var(--accent-soft); border-bottom:1px solid var(--border);}
   .painel-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(216px,1fr)); gap:18px; margin-bottom:28px;}
   .painel-card{
-    background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px 22px;
+    background:var(--bg2); border:1px solid var(--panel-border); border-radius:var(--radius-lg); padding:20px 22px;
     box-shadow:var(--shadow-sm); position:relative; overflow:hidden;
     transition:transform .15s ease, box-shadow .15s ease;
   }
-  .painel-card::before{content:''; position:absolute; top:0; left:0; width:4px; height:100%; background:var(--accent);}
   .painel-card:hover{transform:translateY(-3px); box-shadow:var(--shadow-md);}
-  .painel-card .icon{font-size:19px; display:block; margin-bottom:9px;}
+  /* Versão 6.3: o risco colorido na lateral do card virou um "selo" colorido
+     atrás do ícone (igual aos 4 cards do print de referência) — mesma ideia,
+     só muda onde a cor aparece. A cor alterna sozinha conforme a posição do
+     card dentro do .painel-grid (1º azul, 2º verde, 3º roxo, 4º laranja da
+     marca, e repete), sem precisar de nenhuma classe nova no HTML; ".alerta"
+     (já usado nos cards de atraso/pendência) continua por cima, sempre
+     amarelo, não importa a posição. */
+  .painel-card .icon{
+    font-size:16px; display:flex; align-items:center; justify-content:center;
+    width:34px; height:34px; border-radius:10px; margin-bottom:11px;
+    background:rgba(96,165,250,0.15); color:#60a5fa;
+  }
+  .painel-grid .painel-card:nth-of-type(4n+2) .icon{background:rgba(74,222,128,0.16); color:#4ade80;}
+  .painel-grid .painel-card:nth-of-type(4n+3) .icon{background:rgba(167,139,250,0.18); color:#a78bfa;}
+  .painel-grid .painel-card:nth-of-type(4n+4) .icon{background:var(--accent-soft); color:var(--accent);}
   .painel-card .label{font-size:11px; color:var(--text-muted); margin-bottom:7px; text-transform:uppercase; letter-spacing:0.4px; font-weight:700;}
-  .painel-card .valor{font-size:27px; font-weight:800; color:var(--accent); line-height:1;}
+  .painel-card .valor{font-size:27px; font-weight:800; color:var(--text); line-height:1;}
   .painel-card .sub{font-size:11.5px; color:var(--text-muted); margin-top:7px;}
-  .painel-card.alerta::before{background:#fbbf24;}
-  .painel-card.alerta{border-color:var(--accent);}
+  .painel-card.alerta{border-color:rgba(251,191,36,0.4);}
+  .painel-card.alerta .icon{background:rgba(251,191,36,0.18); color:#fbbf24;}
   .painel-card.alerta .valor{color:#fbbf24;}
   .aviso-producao{
     display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
@@ -412,8 +452,8 @@
      ganhou uma linha separadora em cima — pedido do usuário pra deixar a
      divisão entre as partes mais clara. */
   .navgroup-label{
-    padding:16px 10px 7px; margin:10px 14px 0; font-size:10px; font-weight:700; letter-spacing:0.8px; color:var(--accent);
-    text-transform:uppercase; border-top:1px solid var(--border);
+    padding:16px 10px 7px; margin:10px 14px 0; font-size:10px; font-weight:700; letter-spacing:0.8px; color:var(--sidebar-accent);
+    text-transform:uppercase; border-top:1px solid var(--sidebar-border);
   }
   .brand + .navgroup-label{border-top:none; margin-top:0; padding-top:4px;}
   .cadastro-toolbar{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px;}
@@ -493,11 +533,12 @@
   .login-erro{color:var(--erro); font-size:12.5px; margin-top:12px; min-height:16px;}
   .user-badge{
     display:flex; align-items:center; justify-content:space-between; gap:8px;
-    padding:10px 16px; margin:8px 16px 10px; border-top:1px solid var(--border); padding-top:16px;
+    padding:10px 16px; margin:8px 16px 10px; border-top:1px solid var(--sidebar-border); padding-top:16px;
+    color:var(--sidebar-text);
   }
   .user-badge .info{font-size:12.5px; line-height:1.45;}
-  .user-badge .papel-tag{color:var(--accent); font-weight:600;}
-  .user-badge .sair{color:var(--text-muted); cursor:pointer; font-size:11px; text-decoration:underline; background:none; border:none;}
+  .user-badge .papel-tag{color:var(--sidebar-accent); font-weight:600;}
+  .user-badge .sair{color:var(--sidebar-muted); cursor:pointer; font-size:11px; text-decoration:underline; background:none; border:none;}
 
   /* ══════════════════════════════════════════════════════════
      Versão 5.3 — "ideias pro HTML comercial": foto de perfil (canto da
@@ -506,12 +547,12 @@
      ══════════════════════════════════════════════════════════ */
   .user-avatar{
     width:34px; height:34px; border-radius:50%; object-fit:cover; flex-shrink:0;
-    border:1px solid var(--border); background:var(--bg3);
+    border:1px solid var(--sidebar-border); background:var(--bg3);
   }
   .user-avatar.sm{width:24px; height:24px;}
   .user-avatar-fallback{
     width:34px; height:34px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
-    background:var(--accent-soft); color:var(--accent); font-weight:700; font-size:13px; border:1px solid var(--border);
+    background:var(--sidebar-active-bg); color:var(--sidebar-accent); font-weight:700; font-size:13px; border:1px solid var(--sidebar-border);
   }
   .user-badge{ align-items:center; }
   .loading-avatar{
@@ -560,14 +601,14 @@
     .shell{ display:block; }
     .mobile-topbar{
       display:flex; align-items:center; gap:12px; justify-content:space-between;
-      background:var(--bg2); border-bottom:1px solid var(--border);
+      background:var(--sidebar-bg); border-bottom:1px solid var(--sidebar-border);
       padding:12px 16px; position:sticky; top:0; z-index:40;
     }
-    .mobile-topbar .brand-mobile{font-weight:700; font-size:14px; color:var(--text);}
-    .mobile-topbar .brand-mobile span{color:var(--accent);}
+    .mobile-topbar .brand-mobile{font-weight:700; font-size:14px; color:var(--sidebar-text);}
+    .mobile-topbar .brand-mobile span{color:var(--sidebar-accent);}
     .hamburger-btn{
-      background:none; border:1px solid var(--border); border-radius:8px;
-      color:var(--text); font-size:19px; line-height:1; padding:7px 12px; cursor:pointer;
+      background:none; border:1px solid var(--sidebar-border); border-radius:8px;
+      color:var(--sidebar-text); font-size:19px; line-height:1; padding:7px 12px; cursor:pointer;
     }
     .sidebar{
       position:fixed; top:0; left:0; bottom:0; z-index:55;
@@ -601,7 +642,7 @@
        estouravam a largura do card. Reduz o card inteiro (ícone/valor/
        padding) só no celular — acima de 860px nada muda. */
     .painel-card{ padding:13px 14px; }
-    .painel-card .icon{ font-size:16px; margin-bottom:6px; }
+    .painel-card .icon{ font-size:14px; width:28px; height:28px; margin-bottom:7px; }
     .painel-card .valor{ font-size:18px; }
     .painel-card .label{ font-size:10px; }
     .painel-card .sub{ font-size:10.5px; }
@@ -636,12 +677,12 @@
     .shell{ flex-direction:column; }
     .sidebar{
       width:100%; flex-direction:row; flex-wrap:wrap; align-items:center;
-      padding:0 18px; border-right:none; border-bottom:1px solid var(--border);
-      position:sticky; top:0; z-index:40; background:var(--bg2);
+      padding:0 18px; border-right:none; border-bottom:1px solid var(--sidebar-border);
+      position:sticky; top:0; z-index:40; background:var(--sidebar-bg);
     }
     .brand{
       padding:10px 18px 10px 0; margin-bottom:0; border-bottom:none;
-      border-right:1px solid var(--border); margin-right:4px;
+      border-right:1px solid var(--sidebar-border); margin-right:4px;
     }
     .brand-logo{ height:34px; }
     .navgroup-label{ display:none; }
@@ -650,12 +691,12 @@
       border-radius:0; margin-right:0; white-space:nowrap;
     }
     .navitem.active{
-      border-left:none; border-bottom:3px solid var(--accent); border-radius:0;
+      border-left:none; border-bottom:3px solid var(--sidebar-accent); border-radius:0;
       margin-right:0; background:none;
     }
     .user-badge{
       margin:0 0 0 auto; border-top:none; padding:8px 0 8px 14px;
-      border-left:1px solid var(--border);
+      border-left:1px solid var(--sidebar-border);
     }
     .main{ margin:0 auto; }
   }
@@ -2179,12 +2220,16 @@ const EMAIL_CONFIG = {
 // nenhum template configurado em painel nenhum). Falha aqui nunca trava a
 // ação principal (pedido já foi lançado/salvo de qualquer forma) — só
 // registra no console, igual o EmailJS já fazia.
-async function enviarEmailViaOutlook({ to, cc, subject, text }){
+async function enviarEmailViaOutlook({ to, cc, subject, text, html }){
   if(!EMAIL_CONFIG.enabled) return;
   if(!to){ console.warn('E-mail "' + subject + '": sem destinatário, notificação não enviada.'); return; }
   try{
+    // "html" é opcional — quando vem preenchido (hoje só o e-mail de "novo
+    // pedido" manda), a function usa ele como corpo (contentType HTML);
+    // senão, continua mandando "text" puro como antes (observação interna,
+    // por exemplo, continua só texto).
     const { data, error } = await sb.functions.invoke('enviar-email-outlook', {
-      body: { to, cc: cc || null, subject, text }
+      body: { to, cc: cc || null, subject, text, html: html || null }
     });
     if(error){
       console.error('Outlook: falha ao chamar a function "enviar-email-outlook" pra "' + subject + '". Motivo:', error);
@@ -2294,6 +2339,142 @@ function montarMensagemNovoPedido(p, desenhosLinks, urlOC, urlDesenhoLegado){
   linhas.push(linksAnexo.length ? linksAnexo.join('\n') : '(nenhum desenho ou ordem de compra anexado a este pedido)');
   return linhas.join('\n');
 }
+// Versão 6.3 — pedido do usuário: "deixar o layout do email de quando chega
+// pedido mais profissional" (sem exigência de formato específico, ficou a
+// critério). Monta a MESMA informação de montarMensagemNovoPedido (acima),
+// só que como e-mail em HTML — tabela com estilo "inline" em cada elemento
+// (em vez de <style>/classes), porque é o único jeito que funciona de forma
+// confiável em qualquer leitor de e-mail, Outlook desktop incluso (que usa o
+// motor de renderização do Word por baixo — ignora CSS "moderno" como
+// flexbox/grid/variável CSS, mas respeita tabela + style="" element a
+// elemento). montarMensagemNovoPedido (texto puro) continua existindo e vai
+// junto no mesmo envio como "corpo alternativo" — alguns leitores (raros)
+// não renderizam HTML e caem nele.
+function montarHtmlNovoPedido(p, desenhosLinks, urlOC, urlDesenhoLegado){
+  const cor = { laranja:'#f07a1f', laranjaEscuro:'#c2590f', texto:'#1c2733', mudo:'#67788d', borda:'#e7ebf1', fundoCampo:'#f7f9fb', fundoPagina:'#eef1f6' };
+  function secaoCaixa(titulo, conteudoHtml){
+    return (
+      '<tr><td style="padding-top:18px;">' +
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:' + cor.fundoCampo + '; border-radius:8px;">' +
+          '<tr><td style="padding:14px 16px;">' +
+            '<div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.4px; color:' + cor.mudo + '; margin:0 0 8px;">' + escHtml(titulo) + '</div>' +
+            conteudoHtml +
+          '</td></tr>' +
+        '</table>' +
+      '</td></tr>'
+    );
+  }
+  function linhaCampo(label, valor){
+    return (
+      '<tr>' +
+        '<td style="padding:8px 0; border-bottom:1px solid ' + cor.borda + '; font-size:11.5px; color:' + cor.mudo + '; font-weight:700; text-transform:uppercase; letter-spacing:0.3px; white-space:nowrap; vertical-align:top;">' + escHtml(label) + '</td>' +
+        '<td style="padding:8px 0 8px 14px; border-bottom:1px solid ' + cor.borda + '; font-size:13.5px; color:' + cor.texto + '; font-weight:600; vertical-align:top;">' + (valor ? escHtml(valor) : '<span style="color:' + cor.mudo + '; font-weight:400;">-</span>') + '</td>' +
+      '</tr>'
+    );
+  }
+  const campos = [
+    ['Tipo da venda', p.tipo === 'discos' ? 'Discos' : (p.tipo === 'fundidos' ? 'Fundidos' : (p.tipo || ''))],
+    ['CNPJ', p.cnpj], ['Data de entrada', formatarDataBR(p.dataEntrada)], ['Vendedor', p.vendedor],
+    ['Condição de pagamento', p.condicao], ['Nota', p.notaTipo], ['Transportadora', p.transportadora],
+    ['Quem paga o frete?', p.frete], ['Proposta/PV', p.proposta], ['Número da OC', p.numeroOC],
+    ['Faturamento', p.faturamentoTipo]
+  ];
+  const linhasCampos = campos.map(([l,v])=> linhaCampo(l, v || null)).join('');
+
+  // Engenharia (discos) ou modelo/tratamento (fundidos) por item — mesmo
+  // fallback pro bloco antigo (pedido inteiro) que o texto puro já usa.
+  let blocoEngenharia = '';
+  function linhaItem(codigo, partes){
+    return '<div style="padding:5px 0; font-size:12.5px; color:' + cor.texto + ';"><strong style="color:' + cor.laranjaEscuro + ';">' + escHtml(codigo || '-') + '</strong> — ' + escHtml(partes || '-') + '</div>';
+  }
+  function linhaChaveValor(label, valor){
+    return '<div style="padding:3px 0; font-size:12.5px; color:' + cor.texto + ';"><strong>' + escHtml(label) + ':</strong> ' + escHtml(valor) + '</div>';
+  }
+  if(p.tipo === 'discos'){
+    const itensComEngenharia = (p.itens||[]).filter(it=> it.discoCodigoCompleto || it.discoMontagem || it.parafusos || (it.desenvolvimentoFotos && it.desenvolvimentoFotos.length));
+    if(itensComEngenharia.length){
+      const conteudo = itensComEngenharia.map(it=>{
+        const partes = [
+          it.discoPolegada && ('polegada ' + it.discoPolegada), it.discoMontagem && ('montagem ' + it.discoMontagem),
+          it.discoRefinador && ('refinador ' + it.discoRefinador), it.discoAreaRefinadora && ('área refinadora ' + it.discoAreaRefinadora),
+          it.parafusos && ('parafusos ' + it.parafusos),
+          (it.desenvolvimentoFotos && it.desenvolvimentoFotos.length) && (it.desenvolvimentoFotos.length + ' foto(s) de desenvolvimento anexada(s)')
+        ].filter(Boolean).join(' · ');
+        return linhaItem(it.codigo, partes);
+      }).join('');
+      blocoEngenharia = secaoCaixa('Engenharia por item', conteudo);
+    } else if(p.modelo || p.furacao || p.montagem || p.refinador || p.castanha || p.parafusos){
+      const conteudo = [['Modelo',p.modelo],['Furação',p.furacao],['Montagem do disco',p.montagem],['Refinador',p.refinador],['Castanha (tridisc)',p.castanha],['Parafusos (furação traseira)',p.parafusos]]
+        .filter(([,v])=>v).map(([l,v])=> linhaChaveValor(l,v)).join('');
+      blocoEngenharia = secaoCaixa('Engenharia', conteudo);
+    }
+  } else {
+    const itensComModelo = (p.itens||[]).filter(it=> it.fundidoMaterialModelo || it.fundidoTratamento || it.fundidoEntregaModelo);
+    if(itensComModelo.length){
+      const conteudo = itensComModelo.map(it=>{
+        const partes = [
+          it.fundidoMaterialModelo && ('modelo ' + it.fundidoMaterialModelo), it.fundidoTratamento && ('industrialização ' + it.fundidoTratamento),
+          it.fundidoEntregaModelo && ('entrega do modelo ' + it.fundidoEntregaModelo)
+        ].filter(Boolean).join(' · ');
+        return linhaItem(it.codigo, partes);
+      }).join('');
+      blocoEngenharia = secaoCaixa('Modelo/tratamento por item', conteudo);
+    } else if(p.materialModelo || p.posseEntrega || p.tratamento){
+      const conteudo = [['Modelo (madeira/isopor)',p.materialModelo],['Posse/entrega do modelo',p.posseEntrega],['Tratamento térmico',p.tratamento]]
+        .filter(([,v])=>v).map(([l,v])=> linhaChaveValor(l,v)).join('');
+      blocoEngenharia = secaoCaixa('Modelo/tratamento', conteudo);
+    }
+  }
+
+  const obsConteudo = p.obs
+    ? '<div style="white-space:pre-wrap; font-size:13px; color:' + cor.texto + '; line-height:1.5;">' + escHtml(p.obs) + '</div>'
+    : '<div style="font-size:12.5px; color:' + cor.mudo + ';">(sem observações)</div>';
+  const blocoObs = secaoCaixa('Observações do pedido', obsConteudo);
+
+  const linksAnexo = [];
+  if(desenhosLinks && desenhosLinks.length){
+    desenhosLinks.forEach(d=> linksAnexo.push({ label: 'Desenho — ' + (d.codigo||'item') + ' (' + d.nome + ')', url: d.url }));
+  } else if(p.desenhoArquivo){
+    linksAnexo.push({ label: 'Desenho (' + p.desenhoArquivo.nome + ')', url: urlDesenhoLegado });
+  }
+  if(p.ordemCompraArquivo) linksAnexo.push({ label: 'Ordem de compra (' + p.ordemCompraArquivo.nome + ')', url: urlOC });
+  let blocoAnexos;
+  if(linksAnexo.length){
+    const linhas = linksAnexo.map(a=> a.url
+      ? '<tr><td style="padding:4px 6px 4px 0;"><a href="' + escHtml(a.url) + '" style="display:inline-block; padding:9px 16px; background:#ffffff; border:1.5px solid ' + cor.laranja + '; border-radius:20px; color:' + cor.laranjaEscuro + '; font-size:12.5px; font-weight:700; text-decoration:none;">📎 ' + escHtml(a.label) + '</a></td></tr>'
+      : '<tr><td style="padding:5px 0; font-size:12.5px; color:' + cor.mudo + ';">📎 ' + escHtml(a.label) + ' — link indisponível, abra o pedido no app</td></tr>'
+    ).join('');
+    blocoAnexos = '<tr><td style="padding-top:18px;"><table role="presentation" cellpadding="0" cellspacing="0">' + linhas + '</table></td></tr>';
+  } else {
+    blocoAnexos = secaoCaixa('Anexos', '<div style="font-size:12.5px; color:' + cor.mudo + ';">Nenhum desenho ou ordem de compra anexado a este pedido.</div>');
+  }
+
+  return (
+    '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>' +
+    '<body style="margin:0; padding:0; background:' + cor.fundoPagina + '; font-family:Arial, Helvetica, sans-serif;">' +
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:' + cor.fundoPagina + ';">' +
+        '<tr><td align="center" style="padding:28px 14px;">' +
+          '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px; max-width:100%; background:#ffffff; border-radius:12px; overflow:hidden;">' +
+            '<tr><td style="background:' + cor.laranja + '; padding:22px 28px;">' +
+              '<div style="font-size:16px; font-weight:800; color:#ffffff; letter-spacing:0.4px;">🔔 PROMETALS — Novo pedido</div>' +
+              '<div style="font-size:12.5px; color:rgba(255,255,255,0.88); margin-top:3px;">entrou pedido do vendedor(a): ' + escHtml(p.vendedor || '-') + '</div>' +
+            '</td></tr>' +
+            '<tr><td style="padding:24px 28px 6px;">' +
+              '<div style="font-size:20px; font-weight:800; color:' + cor.texto + ';">' + escHtml(p.id || '-') + ' <span style="font-weight:600; color:' + cor.mudo + ';">·</span> ' + escHtml(p.nomeCliente || '-') + '</div>' +
+            '</td></tr>' +
+            '<tr><td style="padding:10px 28px 4px;">' +
+              '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">' + linhasCampos + '</table>' +
+            '</td></tr>' +
+            '<tr><td style="padding:0 28px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">' + blocoEngenharia + blocoObs + blocoAnexos + '</table></td></tr>' +
+            '<tr><td style="padding:24px 28px 26px;">' +
+              '<div style="border-top:1px solid ' + cor.borda + '; padding-top:14px; font-size:11px; color:' + cor.mudo + '; line-height:1.5;">Aviso automático do sistema de pedidos Prometals — não é preciso responder este e-mail. Pra ver todos os detalhes, abra o pedido direto no app.</div>' +
+            '</td></tr>' +
+          '</table>' +
+        '</td></tr>' +
+      '</table>' +
+    '</body></html>'
+  );
+}
 const EMAIL_ANEXO_VALIDADE_SEGUNDOS = 30 * 24 * 3600; // link do desenho/OC no e-mail vale 30 dias
 async function notificarNovoPedido(p){
   if(!EMAIL_CONFIG.enabled) return;
@@ -2312,7 +2493,8 @@ async function notificarNovoPedido(p){
       to: EMAIL_CONFIG.destinatario,
       cc: EMAIL_CONFIG.cc,
       subject: 'Novo pedido — ' + p.id + ' (' + (p.nomeCliente || '-') + ')',
-      text: montarMensagemNovoPedido(p, desenhosLinks, urlOC, urlDesenhoLegado)
+      text: montarMensagemNovoPedido(p, desenhosLinks, urlOC, urlDesenhoLegado),
+      html: montarHtmlNovoPedido(p, desenhosLinks, urlOC, urlDesenhoLegado)
     });
   }catch(e){ console.error('Outlook: erro inesperado ao montar a notificação de ' + p.id + '.', e); }
 }
